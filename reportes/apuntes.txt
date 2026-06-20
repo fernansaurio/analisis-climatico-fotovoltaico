@@ -1,0 +1,263 @@
+
+Quiero que se separe por analicis de cada sensor, por que tengo dos sensores y si no me equivoco dos años de medicion,
+tener un calendario para ver por cada dia, como en msn al inicio aparece una barra con recuadros que contiene los dias
+como estuvo el clima si nublado, soleado o lluvioso, al seleccionar los dias, aparece un grafico a lo largo del dia
+que contiene la irradiancia del sol en una forma con curvas con colores y abajo el porcentaje de humedad por horas, 
+quiero que se pueda hacer eso pero no se como hacer para que los datos se esten analizando al momento de utilizar la pagina
+web
+
+En ese caso lo tengo por dias, pero tambien quiero que se pueda analizar los datos por periodos de tiempo asi que se pueda
+elegir el periodo, ya sea dia, mes o año o todos los datos en general, por lo que las graficas tiene que cambiar a medida
+se vayan moviendo luego abajo aparecen mas datos especificos  como un pequeño recuadro con temperatura, y una grafica de como
+va cambiando al pasar el tiempo, no tiene muchos datos es mas simbolico, luego la sensacion termica al igual con una grafica
+si no se tienen esos datos ¿Se pueden obtener de alguna parte?
+
+Aparece los milimetros de precipitaciones, una especie de brujula con el viento, velocidad y un pequeño analisis, se puede 
+integrar un pequeño analisis segun el dato obtenido, un grafico con el indice de humedad pero aparece como un grafico de
+barras, nivel uv, datos sobre la calidad de aire, aunque no se si dispongo en los archivos csv, sobre la presion al igual
+un grafico, hora en la que sale el sol y la ora hora en que se oculta con un grafico simulando la trayectoria del sol,
+de igual uno para la luna, y un ultimo recuadro que contiene la fase lunar, habia escuchado a mi docente que existe unas 
+ecuaciones para saber la fase lunar segun la fecha, se puede utilizar y colocar un par de graficos que representen la fase de
+la luna
+
+Tengo unos enlaces que contienen graficos en vivo sobre el viento, se puede agregar como una especie de decoracion:
+
+Aqui hay un mapa de direccion de viento activo:
+
+https://embed.windy.com/config/map
+
+Talvez este otro se puede hacer con un embed (verificar)
+
+https://earth.nullschool.net/#current/wind/surface/level/orthographic=-88.13,14.27,363/loc=-89.276,14.823
+
+
+en la primera barra que tenemos, hay opciones de informacion general, precipitaciones, viento, calidad de aire,
+humedad, presion y ultravioleta, segun que selecciono en esta barra de opciones, obtengo graficas diferentes
+de ahi mi necesidad de hacerlo reactivo.
+
+
+
+
+///
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+SGUNDO PROMPT
+
+Funciono correctamente, pero necesito varias cosas extra sobre todo en la terminal y en el proceso
+de ejecucion del programa, el primero es la depuracion del csv, no se como se hace exactamente pero
+necesito que cuando se haga la limpieza del csv, se guarde en otro csv ya limpio, puedes hacer una comprobacion de si existe
+ese archivo ya con los datos limpios y si no se crea nuevamente, en las proximas ejecuciones se busca el csv limpio
+
+Además necesito que al momento de hacer la interpolacion se verifique el metodo que se toma, puedes dejar una parte al final de
+la ejecucion de todo el programa por que se eligio ese metodo para interpolar, asegurate de que los procesos de interpolacion
+se hagan directamente en el codigo y no en librerias externas
+
+
+
+TERCER PROMPT
+
+Necesito que la grafica que esta al inicio de irradiancia con humedad se separa
+que sea solo humedad con temperatura, la grafica de irradiancia la puedes poner en otra grafica por aparte, 
+ademas no se si la parte del embed se puede hacer zoom en la zona de El Salvador 
+
+
+CUARTO PROMPT
+
+Quiero que la barra de tareas que aparece arriba al bajar me siga apareciendo en la barra superior, esto lo quiero hacer en forma de
+prueba, por que si necesito ver datos de otros momentos en especificos no quiero estar subiendo, cambiando y comparando datos.
+Otra cosa que note es que en la parte de las graficas en recuadros no donde dice analisis estadistico no esta ploteando nada para
+datos de UV, hay que revisar eso.
+
+No se que formas tengo para que la pagina se pueda optimizar de una u otr aforma, veo que como le he agregado
+muchos datos o graficas esta se esta poniendo un poco lenta, primero implementa los cambios mencionados anteriormente y luego
+evalua que metodos podemos tomar para optimizar, me preguntas y te confirmo si aplicamos optimizaciones, pero primero los anteriores
+cambios
+
+
+
+QUINTO PROMPT
+(Se aplico cambios de optimizacion, Lazy Load para que se vaya cargando a medida se vaya bajando para no generar graficas de una vez
+al iniciar la pagina y comprimir el JSON debido a que los datos de fechas representan un 70% de los datos de la pagian, haciendo que la carga
+de datos y renderizados sea un poco lenta.)
+
+
+SEXTO PROMPT
+Al ir bajando con el raton y el cursor queda por encima de las graficas interactivas, las graficas se empiezan a mover
+empiezan a hacer zoom y a descontrolarse, puedes hacer una forma de que no se toquen estas graficas, talvez una forma de seleccionarlas
+para hacer algun cambio, sin necesidad de que al ir bajando haciendo una inspeccion, se muevan todas las graficas,
+
+Las ultimas graficas son ploteadas co un PNG y me gustaria que tambien al pasar el cursor encima me mostraran datos, o hay una grafica abajo
+de temperatura exterior que esta bastante saturada, seria bueno poder hacer zoom o que al pasar el cursor mostrara los datos
+
+Ademas quisiera aplicar una optimizacion al calculo, cada vez que ejecuto un cambio y corro el codigo de python necesito recalcular todo
+y es un poco tedioso y demanda mucho hardware,si se pudiera que guarde los datos ya calculados de alguna forma en algun archivo y que me de a elegir si
+quiero volver a calcular todo de nuevo, por que todos losd atos que tengo hasta el momento son con los mismos datos calculados
+
+
+
+SEPTIMO PROMPT
+Bien funciona, pero no me gusta la idea del boton, no seria mejor darle un clic para que se activen y se pueda mover, pero ademas de que cuando se scrolle
+para hacerle zoom no baje la pagina porque siempre baja, luego que la opcion de UV como no hay datos hay que eliminarlo del codigo, porque de todas
+formas no hay datos para eso.
+
+
+Aparte de eso, no se que otras cosas se le pueden agregar a la pagina, informacion que se pueda obtener mediante esos datos. Hazme un listado de ideas

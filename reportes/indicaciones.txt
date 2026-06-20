@@ -1,0 +1,11 @@
+EL proyecto esta bastante bien, pero hay un par de restricciones que debo seguir, el primero como ya te diste cuenta es que todos los calculos estadisticos se hagan de forma nativa sin utilizar librerias externas, y eso ya lo tengo en mi .so con su codigo de python que lo conecta utilizando cdll.
+
+Además de que las graficas que estoy haciendo deben ser ploteadas con canvas, asi como lo hice en mi codigo "analisis_climatico.py", para que tengan diferentes opciones dinamicas, que tenga metodos de filtrado por medio de un calendario al igual que en el anterior, tambien quiero que agregues un apartado para hacer comparativa entre dos rangos de tiempo, ya sea dia mes o año o  lo que se guste, se puede hacer con un calendario interactivo que permita seleccionar dias, meses o años. Estos cambios se deben aplicar al codigo que analiza datos de la planta fotovoltaica.
+
+Además para el otro codigo que analisa los sensores climaticos, agrega ese calendario interactivo para poder filtrar por fechas y el apartado de comparativa entre dos rangos de tiempos, siempre manten la estructura de como han estado los dias del mes como lo tengo ya, pero cuando se active un rango de tiempo en el calendario que se desactiven los recuadros de los dias y viceversa.
+
+La comparativa entre dos rangos de tiempo que tenga datos estadisticos además de datos esenciales para un publico general.
+
+Recuerda que todo esto lo tienes que trabajar en el directorio de mi escritorio /Escritorio/Tarea , sin tocar ningun otro elemento.
+
+No me preguntes nada, ejecuta lo que creas conveniente.

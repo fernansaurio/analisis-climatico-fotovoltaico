@@ -1,0 +1,17 @@
+# Datos crudos (quedan solo en local)
+datos_crudos/
+
+# Cache de cálculos Python
+analisis_cache.pkl
+
+# Compilados C++ (plataforma-específicos)
+*.so
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Sistema
+.DS_Store
+*.swp

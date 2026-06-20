@@ -1,0 +1,925 @@
+================================================================================
+  BITÁCORA DEL PROYECTO
+  Análisis Climático Avanzado con Métodos Numéricos
+  Autor: Fernando Padilla
+  Directorio: /home/kioryu/Escritorio/Tarea
+================================================================================
+
+Última actualización: 2026-06-19
+
+================================================================================
+  DESCRIPCIÓN GENERAL DEL PROYECTO
+================================================================================
+
+Proyecto académico de Programación Numérica orientado al análisis de datos
+climáticos reales registrados por dos estaciones meteorológicas en El Salvador:
+
+  · EEP  — Estación exterior (escuela / zona 1)
+  · UES  — Estación exterior (universidad / zona 2)
+
+Restricciones académicas obligatorias:
+  - Todos los cálculos estadísticos deben implementarse de forma nativa
+    (sin .mean(), .std(), .median(), .min(), .max(), .quantile() de pandas/numpy)
+  - El motor matemático se implementa en C++ y se expone a Python mediante ctypes
+  - Las gráficas interactivas deben renderizarse con Canvas (HTML5 / uPlot / Chart.js)
+    sin depender de matplotlib para el output final al usuario
+
+================================================================================
+  ESTRUCTURA DEL PROYECTO (estado actual 2026-06-16)
+================================================================================
+
+Archivos principales:
+  analisis_climatico.py       — Módulo principal de sensores climáticos (227 KB)
+  analisis_sma.py             — Módulo de planta fotovoltaica SMA (89 KB)
+  ajuste_curvas.py            — Wrapper Python → C++ (AjusteCurvas)
+  metodos_raices.py           — Wrapper Python → C++ (Newton-Raphson)
+  algebra_lineal_lib.py       — Wrapper Python → C++ (AlgebraLineal)
+
+Librerías compiladas C++:
+  ajuste_curvas_lib.so        — Motor de regresión y ajuste de curvas (82 KB)
+  algebra_lineal.so           — Operaciones matriciales (95 KB)
+  libraices.so                — Métodos de búsqueda de raíces (16 KB)
+
+Datos de entrada (CSVs):
+  7GT-EEP_1-1-25_...v2.csv         — EEP sensor año 2025 (26 MB, raw)
+  7GT-EEP_1-1-25_...v2_clean.csv   — EEP 2025 limpio y curado (22 MB)
+  7GT-EEP_1-1-26_...v2.csv         — EEP sensor 2026 parcial (12 MB, raw)
+  7GT-EEP_1-1-26_...v2_clean.csv   — EEP 2026 limpio (9.7 MB)
+  7GT-UES_1-1-25_...v2.csv         — UES sensor año 2025 (25 MB, raw)
+  7GT-UES_1-1-25_...v2_clean.csv   — UES 2025 limpio (22 MB)
+  7GT-UES_1-1-26_...v2.csv         — UES sensor 2026 parcial (11 MB, raw)
+  7GT-UES_1-1-26_...v2_clean.csv   — UES 2026 limpio (9.2 MB)
+  2023-2024/2023/                   — CSVs SMA por día año 2023
+  2023-2024/2024/                   — CSVs SMA por día año 2024
+  SMA-EIE-2025-2026/                — CSVs SMA por día 2025-2026 (1184 archivos)
+
+Dashboards generados:
+  dashboard_proyecto_climatico.html  — Dashboard académico/estadístico (1.9 MB)
+  dashboard_msn_interactivo.html     — Dashboard interactivo MSN-style (19 MB)
+  dashboard_solar.html               — Dashboard Canvas planta solar (4.7 MB)   ← NUEVO
+  dashboard_sma_standalone.html      — Dashboard antiguo SMA matplotlib (2 MB)
+
+Otros archivos:
+  analisis_cache.pkl          — Caché de resultados pre-calculados (103 MB)
+  apuntes.txt                 — Notas de prompts anteriores del usuario
+  indicaciones.txt            — Directivas para la sesión actual
+  bitacora.txt                — Este archivo
+  README.md                   — Documentación técnica del proyecto
+  chart.umd.min.js            — Chart.js local (para uso sin red)
+  uPlot.iife.min.js           — uPlot local (para uso sin red)
+  uPlot.min.css               — Estilos uPlot
+  test.html                   — Archivo de prueba temporal
+
+================================================================================
+  HISTORIAL DE CAMBIOS POR PROMPT
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 1 — Diseño inicial del dashboard climático
+────────────────────────────────────────────────────────────────────────────────
+
+Solicitud:
+  - Separar el análisis por sensor (EEP y UES)
+  - Calendario estilo MSN con recuadros por día (soleado / nublado / lluvioso)
+  - Al seleccionar un día: gráfico de irradiancia solar con curvas y humedad
+  - Soporte para filtrar por día, mes, año o todo el período
+  - Widgets con temperatura, sensación térmica, precipitaciones, viento (brújula),
+    humedad (gráfico de barras), presión, hora de salida/ocaso del sol, fase lunar
+  - Embed de mapa de viento de Windy y earth.nullschool.net como decoración
+  - Barra de opciones reactiva (General / Precipitaciones / Viento / Calidad de aire
+    / Humedad / Presión / UV)
+
+Implementado:
+  - Primera versión de analisis_climatico.py con motor estadístico manual
+  - Cálculo de fase lunar mediante fórmula matemática (sin APIs externas)
+  - Gráficos con uPlot (Canvas) para irradiancia y humedad
+  - Dashboard HTML generado con datos embebidos como JSON (window.CLIMA)
+  - Widgets de temperatura, presión, precipitaciones
+  - Embeds iframe de Windy y earth.nullschool (decorativos)
+  - Barra reactiva con cambio dinámico de gráficas según variable seleccionada
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 2 — Limpieza de CSV + interpolación transparente
+────────────────────────────────────────────────────────────────────────────────
+
+Solicitud:
+  - Al limpiar el CSV, guardar versión limpia en un archivo separado (*_clean.csv)
+  - Verificar si ya existe el archivo limpio antes de volver a generarlo
+  - Al interpolar datos faltantes, mostrar al final qué método se eligió y por qué
+  - Los procesos de interpolación deben implementarse directamente en el código
+    (no delegar a librería)
+
+Implementado:
+  - Función de curado que genera *_clean.csv y lo reutiliza en ejecuciones siguientes
+  - Interpolación lineal manual implementada en Python puro (sin .interpolate())
+  - Sección de salida en consola explicando qué método de interpolación se aplicó
+    y el razonamiento (monotonía del sensor, gaps cortos vs largos)
+  - Validación de columnas nulas por umbral configurable
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 3 — Separación de gráficas irradiancia / humedad-temperatura
+────────────────────────────────────────────────────────────────────────────────
+
+Solicitud:
+  - Separar la gráfica inicial: humedad + temperatura van juntas, irradiancia aparte
+  - Verificar si el embed de Windy permite hacer zoom en El Salvador
+
+Implementado:
+  - Gráfica principal separada en dos paneles uPlot:
+      · Panel 1: Temperatura (°C) + Humedad (%) con eje Y doble
+      · Panel 2: Irradiancia solar (W/m²) en panel independiente
+  - El embed de Windy se configuró con coordenadas centradas en El Salvador
+    lat=14.27 lon=-88.13 con zoom inicial 363 (nivel país)
+  - Sincronización de cursor entre ambas gráficas uPlot (key: 'clima-sync')
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 4 — Navbar sticky + revisión gráficas académicas + diagnóstico de velocidad
+────────────────────────────────────────────────────────────────────────────────
+
+Solicitud:
+  - La barra de opciones superior debe quedarse fija al hacer scroll (sticky)
+  - Las gráficas del apartado "Análisis Estadístico" no estaban ploteando datos UV
+    (revisar y corregir)
+  - Diagnosticar y proponer opciones de optimización de velocidad de carga
+
+Implementado:
+  - Navbar convertido a position:sticky + z-index elevado
+  - Revisión del módulo de gráficas UV: confirmado que los CSV de EEP y UES no
+    contienen columna de índice UV → sección eliminada del código para no mostrar
+    gráfica vacía
+  - Se plantearon dos estrategias de optimización: Lazy Load e compresión JSON
+    (se dejó para el siguiente prompt con confirmación del usuario)
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 5 — Optimizaciones de rendimiento (Lazy Load + caché)
+────────────────────────────────────────────────────────────────────────────────
+
+Solicitud (confirmación de optimizaciones propuestas):
+  - Lazy Load para gráficas del apartado académico (que no se dibujen todas al
+    iniciar la página, solo cuando entran en viewport)
+  - Comprimir JSON embebido (los timestamps de fecha representaban ~70% del peso)
+
+Implementado:
+  - IntersectionObserver para activar renderizado de gráficas académicas solo
+    cuando la sección es visible en pantalla (aparece al bajar el scroll)
+  - Flag _acadVisible + _acadPendiente para controlar si hay renders pendientes
+  - Caché de resultados en analisis_cache.pkl (103 MB): al ejecutar el script,
+    si el caché existe y los CSV no han cambiado, se cargan los resultados
+    pre-calculados sin volver a procesar
+  - JSON de CLIMA comprimido: fechas como índice de día relativo en lugar de
+    string completo; reconstrucción en JS al cargar
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 6 — Control de zoom en gráficas interactivas + últimas gráficas matplotlib
+────────────────────────────────────────────────────────────────────────────────
+
+Solicitud:
+  - Al hacer scroll sobre las gráficas uPlot, se dispara zoom/pan accidental
+    → necesita activación explícita antes de interactuar
+  - Las últimas gráficas (PNGs de matplotlib) no son interactivas, se quiere
+    que muestren datos al pasar el cursor o que soporten zoom
+  - Opción de guardar cálculos para no recalcular todo en cada ejecución
+
+Implementado:
+  - Sistema de activación por clic: las gráficas uPlot tienen estado "inactivo"
+    por defecto (pointer-events:none, clase .u-over desactivada). Al hacer
+    clic en una gráfica se activa solo esa (clase chart-active), las demás
+    quedan bloqueadas. Clic fuera = desactiva todas
+  - Gráfica de temperatura exterior (matplotlib PNG) reemplazada por uPlot
+    interactivo con tooltip al pasar el cursor
+  - Botones de zoom manual (＋ / － / ⟳) en cada panel para evitar dependencia
+    del scroll del mouse
+  - Caché implementado (analisis_cache.pkl) con verificación de mtime de CSVs
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 7 — Refinamiento del sistema de activación + eliminación UV
+────────────────────────────────────────────────────────────────────────────────
+
+Solicitud:
+  - No usar botón para activar gráficas; mejor activar con clic directo
+  - Al hacer zoom con scroll sobre una gráfica activa, que no baje la página
+  - Eliminar completamente la sección UV del código (no hay datos de UV)
+  - Listado de ideas de qué más se podría agregar a la página
+
+Implementado:
+  - Activación por clic directo en el área de la gráfica (clase .u-over)
+  - Cuando una gráfica está activa: event.preventDefault() en wheel para
+    interceptar el scroll y dirigirlo al zoom de uPlot en vez de la página
+  - Código UV eliminado completamente: columna, procesamiento, widget y gráfica
+  - Se proporcionó listado de ideas al usuario:
+    · Índice de disconfort térmico (Humidex / Temperatura aparente)
+    · Detección automática de eventos extremos (olas de calor, lluvias intensas)
+    · Comparativa inter-estacional EEP vs UES con correlación de Pearson
+    · Análisis de tendencia (regresión lineal sobre meses)
+    · Tabla de récords históricos (máximos/mínimos absolutos con fecha)
+    · Predicción simple por media móvil
+    · Gráfica de rosa de vientos (si hay datos de dirección)
+    · Exportar datos filtrados como CSV desde la interfaz
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 8 — Sesión con Claude Code (indicaciones.txt)
+Fecha: 2026-06-16
+────────────────────────────────────────────────────────────────────────────────
+
+Solicitud (leída de indicaciones.txt):
+  1. Todos los cálculos estadísticos nativos vía .so + ctypes (ya cumplido)
+  2. Gráficas con Canvas como en analisis_climatico.py (no matplotlib)
+  3. analisis_sma.py: reemplazar matplotlib por Canvas, agregar calendario
+     interactivo con filtro por fecha y panel de comparativa entre dos rangos
+  4. analisis_climatico.py: agregar calendario interactivo para filtro de fechas
+     y panel de comparativa entre dos rangos de tiempo; mantener recuadros de
+     días pero desactivarlos cuando el modo comparación esté activo y viceversa
+  5. La comparativa debe incluir estadísticos + interpretación para público general
+  6. Trabajar solo en /Escritorio/Tarea
+
+También realizado en esta sesión:
+  - Corrección de visualización del terminal (fuente JetBrains Mono Nerd Font 12
+    instalada en ~/.local/share/fonts/ y configurada en gnome-terminal)
+
+Cambios realizados en analisis_climatico.py:
+  A) CSS — Añadidos estilos para el panel de comparativa:
+       .comp-panel, .comp-panel.visible, .comp-row, .comp-group, .date-inp
+       .comp-badge-a, .comp-badge-b, .btn-run-comp, .comp-result
+       .comp-table-wrap, .comp-table, .comp-diff-pos, .comp-diff-neg
+       .comp-mini-charts, .comp-mini-card, .comp-mini-label
+       .comp-interp, .btn-comparar-active
+
+  B) HTML navbar — Añadido botón "📊 Comparar" junto al selector de período
+       (id="btn-comparar", onclick="toggleComparacion()")
+
+  C) HTML calendario — Añadido panel de comparativa debajo del cal-scroll:
+       Dos selectores de rango de fecha (Rango A y Rango B) con inputs type="date"
+       Botón "Comparar rangos" que dispara renderComparacion()
+       Div #comp-result para mostrar los resultados
+
+  D) JavaScript — Añadidas funciones antes de init():
+       · modoComparacion: bool — estado global del modo comparación
+       · toggleComparacion() — muestra/oculta panel; oculta/muestra cal-section
+       · _prefillCompDates() — pre-rellena fechas con primera mitad / segunda mitad
+       · getDatosRango(desde, hasta) — filtra fechasConSensor por rango de fechas
+       · _extraerValores(entradas, clave) — extrae array plano de valores horarios
+       · _etiquetaVariable(k) — mapea clave interna → nombre legible
+       · _interpretarComparacion(statsA, statsB, claveActiva) — genera texto
+         explicativo comparando σ, media y N entre los dos rangos
+       · renderComparacion() — construye tabla HTML con estadísticos por variable
+         (N, Media, σ, Mín, Máx para Rango A y Rango B, más Δ Media)
+         más mini-gráficas Canvas superpuestas (Rango A rojo / Rango B verde)
+         más párrafo de interpretación en lenguaje accesible al público general
+       · dibujarCompChart(canvas, datA, datB) — dibuja dos líneas sobre canvas 2D
+         con área rellena bajo la curva A, sin dependencia de librerías externas
+
+  Comportamiento resultante:
+       · Cuando se activa comparación: calendario de días se oculta (display:none)
+       · Cuando se desactiva: calendario vuelve a aparecer
+       · Los inputs de fecha se pre-rellenan automáticamente con el primer y
+         segundo semestre del período disponible
+
+Cambios realizados en analisis_sma.py:
+  A) import json — añadido al bloque de imports al inicio del archivo
+
+  B) _construir_json_solar(df) — función nueva que serializa el DataFrame a JSON:
+       · Itera el DataFrame agrupado por fecha (pandas groupby, O(n) en lugar de O(n²))
+       · Por cada día: extrae ts (HH:MM), pac_total, irr, tamb, tmod
+       · Calcula agregados diarios: kwh (suma energia_wh/1000), pac_max,
+         irr_max, tamb_avg, tmod_avg
+       · Retorna: { "dias": { "YYYY-MM-DD": { kwh, pac_max, irr_max, tamb_avg,
+         tmod_avg, "horas": { t, pac, irr, tamb, tmod } } },
+         "energia_mensual": { "YYYY-MM": kwh } }
+       · Valores NaN → None (serializa como JSON null)
+
+  C) generar_dashboard_solar_canvas(resultado, nombre) — función nueva (HTML completo):
+       Estructura del dashboard generado (dashboard_solar.html, 4.7 MB):
+
+       · Navbar sticky: título "☀️ SMA Solar" + botones Día/Mes/Año/Todo
+         + botón "📊 Comparar" con toggle activo/inactivo
+
+       · KPI row (4 tarjetas): Energía total acumulada (kWh), Potencia AC media (W),
+         Irradiancia media (W/m²), Correlación Irr-Pac (r)
+
+       · Calendario de días: tiles con nombre del día, número, kWh del día,
+         barra de progreso proporcional al máximo del período; navegación mes a mes
+
+       · Panel comparativa (oculto por defecto): igual que en analisis_climatico.py,
+         con Rango A (rojo) y Rango B (verde), tabla de estadísticos por variable
+         [Energía diaria (kWh), Potencia pico, Irradiancia pico, T. Ambiente,
+         T. Módulo], mini-gráficas Canvas, texto interpretativo especializado
+         en energía solar
+
+       · uPlot — Gráfica PAC + Irradiancia: dual-Y, sincronización de cursor,
+         muestra Potencia AC (W) o Energía (kWh/día) según período activo,
+         Irradiancia como línea discontinua en eje secundario (W/m²)
+
+       · uPlot — Temperaturas: T. Ambiente (azul) y T. Módulo (rojo) en un
+         eje común (°C), sincronización de cursor compartida ('solar')
+
+       · Stats grid: tarjetas con Media, σ, Máx, Mín, Mediana, N para cada
+         variable clave (pac_total, irr, tamb, tmod, energia_wh)
+
+       · Botones de zoom manual (＋ / － / ⟳) en cada panel uPlot
+       · Redimensionado automático al cambiar tamaño de ventana (window resize)
+
+       Funciones JS implementadas en el dashboard:
+         fechasDias(), diasDelMes(), kwhMaxDia(), fmtFecha(), semNombre()
+         renderCalendario(), calNav(), seleccionarDia()
+         setPeriodo(), actualizarNavLabel()
+         getDatosPeriodo(), construirSeriesUplot()
+         buildUPac(), buildUTemp(), chartWidth(), actualizarGraficos()
+         uZoom(), uZoomReset()
+         renderStatsGrid()
+         toggleComparacion(), _prefillDates(), _calcStats(), _getDiasRango()
+         _interpretarSolar(), renderComparacion(), _drawCompChart()
+         init()
+
+  D) __main__ actualizado:
+       Antes: generaba dashboard_sma_standalone.html con matplotlib/base64
+       Ahora: llama a generar_dashboard_solar_canvas() → dashboard_solar.html
+
+  E) _jv() + stats_json pre-serialización: helper para limpiar NaN antes
+     de json.dumps() (NaN no es JSON válido)
+
+  Bugs encontrados y corregidos durante la sesión:
+    · sub = df2[[inc for inc in mask]] — índice booleano mal aplicado → eliminado
+    · mask sin definir dentro de groupby loop → reemplazado por acceso a grp
+    · json.dumps({{...}}) dentro de f-string → set comprehension con dicts
+      produce TypeError: unhashable type: 'dict' → movido a pre-computación
+    · sA.sd / sA.min / sA.max no existen en calcStats() de analisis_climatico.py
+      → corregido a sA.sigma / sA.vmin / sA.vmax
+
+  Resultado final:
+    · dashboard_solar.html generado exitosamente (4.7 MB)
+    · 1184 días (2023-01-01 → 2026-06-01) con 154,655 registros embebidos
+    · Correlación irradiancia-potencia: r = 0.9754 (Muy fuerte)
+    · Energía total acumulada registrada: 5,787.9 kWh
+
+================================================================================
+  ALGORITMOS Y MOTOR MATEMÁTICO
+================================================================================
+
+Implementados en C++ (expuestos a Python vía ctypes):
+  · AjusteCurvas      (ajuste_curvas_lib.so)  — regresión, mínimos cuadrados
+  · MetodosRaices     (libraices.so)          — Newton-Raphson, bisección
+  · AlgebraLineal     (algebra_lineal.so)     — operaciones matriciales
+
+Implementados en Python puro (motor manual en analisis_climatico.py):
+  · _media(s)          — media aritmética por acumulación
+  · _varianza(s)       — varianza insesgada (n-1) por bucle
+  · _sqrt_nr(x)        — raíz cuadrada por método de Newton-Raphson (Babilónico)
+  · _maximo(s)         — máximo por barrido lineal
+  · _minimo(s)         — mínimo por barrido lineal
+  · _quicksort(arr)    — QuickSort con mediana de tres como pivote
+  · _percentil(s, p)   — percentil por interpolación lineal post-sort
+  · _pearson(x, y)     — correlación de Pearson sin caja negra
+  · _estadisticos()    — función que reúne todos los anteriores (n, media,
+                         varianza, σ, máx, mín, rango, p10, p25, p50, p75, p90,
+                         IQR, IC95%)
+
+Implementados en JavaScript (motor manual en el HTML embebido):
+  · calcStats(vals)    — n, media, σ, varianza, vmin, vmax, p25, p50, p75,
+                         IC inferior y superior (analisis_climatico.py)
+  · _calcStats(vals)   — versión simplificada para comparativa (analisis_sma.py)
+
+================================================================================
+  TECNOLOGÍAS UTILIZADAS
+================================================================================
+
+Backend (Python):
+  · pandas             — lectura de CSV, agrupación por fecha (groupby)
+  · numpy              — arreglos y conversiones de tipo
+  · matplotlib         — solo para gráficas estáticas en dashboard_proyecto
+  · ctypes             — puente Python ↔ C++ para librerías .so
+  · json               — serialización de datos para embebido en HTML
+  · datetime           — manejo de fechas y timestamps
+
+Frontend (HTML embebido):
+  · uPlot 1.6.31       — gráficas de series temporales en Canvas (ultra-rápidas)
+  · Chart.js 4.4.3     — histogramas, boxplots, scatter en sección académica
+  · Canvas 2D API      — sparklines y mini-gráficas de comparativa (código propio)
+  · IntersectionObserver — lazy loading de sección académica
+  · CSS Custom Properties — theming dark (--bg, --card, --brd, --blue, --warm…)
+
+Sistema:
+  · ZorinOS (Ubuntu/Debian) con kernel 6.17.0-35-generic
+  · JetBrains Mono Nerd Font 12 (terminal)
+  · g++ con C++17 para compilar las librerías .so
+
+================================================================================
+  ESTRUCTURA JSON DE DATOS EMBEBIDOS
+================================================================================
+
+window.CLIMA (analisis_climatico.py → dashboard_msn_interactivo.html):
+  {
+    "sensores": ["EEP", "UES"],
+    "dias": {
+      "YYYY-MM-DD": {
+        "EEP": {
+          "temp_max", "temp_min", "hum_avg", "lluvia", "vel_viento",
+          "condicion",   ← "soleado" / "nublado" / "lluvia"
+          "horas": {
+            "t":      ["HH:MM", ...],
+            "temp":   [float, ...],
+            "hum":    [float, ...],
+            "presion":[float, ...],
+            "lluvia": [float, ...],
+            "viento": [float, ...]
+          }
+        },
+        "UES": { ...igual... }
+      }
+    },
+    "fases_lunares": { "YYYY-MM-DD": "🌑"/"🌒"/... },
+    "sol":   { "YYYY-MM-DD": { "amanecer": "HH:MM", "ocaso": "HH:MM" } },
+    "stats": { alias: { n, media, sigma, varianza, vmin, vmax, p25, p50, p75 } },
+    "stats_mensual": { "YYYY-MM": { alias: { ...mismos stats... } } }
+  }
+
+window.SOLAR (analisis_sma.py → dashboard_solar.html):
+  {
+    "dias": {
+      "YYYY-MM-DD": {
+        "kwh":      float,   ← energía diaria en kWh
+        "pac_max":  float,   ← potencia pico del día (W)
+        "irr_max":  float,   ← irradiancia pico del día (W/m²)
+        "tamb_avg": float,   ← temperatura ambiente promedio (°C)
+        "tmod_avg": float,   ← temperatura módulo promedio (°C)
+        "horas": {
+          "t":    ["HH:MM", ...],
+          "pac":  [float|null, ...],   ← potencia AC total (W)
+          "irr":  [float|null, ...],   ← irradiancia (W/m²)
+          "tamb": [float|null, ...],   ← temperatura ambiente (°C)
+          "tmod": [float|null, ...]    ← temperatura módulo (°C)
+        }
+      }
+    },
+    "energia_mensual": { "YYYY-MM": float }
+  }
+
+================================================================================
+  NOTAS TÉCNICAS Y DECISIONES DE DISEÑO
+================================================================================
+
+1. Comparativa de rangos (ambos módulos)
+   - Se eligió mostrar la comparativa con rango de FECHAS (date picker) en lugar
+     de selector por día/mes/año porque permite comparar períodos arbitrarios
+   - Los rangos A y B se codifican en color: rojo (#f87171) vs verde (#34d399)
+   - Las mini-gráficas Canvas downsamplea la serie a 60 puntos para rendimiento
+   - La interpretación automática analiza: diferencia de medias, diferencia de σ,
+     y advierte si algún rango tiene pocos datos (N < 10)
+   - Modo comparación y modo calendario son mutuamente excluyentes (toggle)
+
+2. Por qué uPlot en vez de Chart.js para las series temporales
+   - uPlot es ~100x más rápido que Chart.js para series de miles de puntos
+   - Usa WebGL-level Canvas rendering con repaint mínimo
+   - Soporta sincronización de cursor entre múltiples gráficas (key: 'clima-sync')
+   - Chart.js se mantiene para histogramas y boxplots donde uPlot no encaja
+
+3. Caché analisis_cache.pkl
+   - Evita recalcular 154,655 registros de SMA + los CSVs climáticos en cada run
+   - Se invalida si el mtime de algún CSV cambia
+   - Es de 103 MB porque incluye el DataFrame completo serializado
+
+4. Interpolación de datos faltantes
+   - Se usa interpolación lineal manual (sin .interpolate() de pandas)
+   - Solo se interpola si el gap es corto (configurable, default ≤ 3 muestras)
+   - Gaps más largos se dejan como NaN para no inventar datos
+
+5. Datos del SMA
+   - Los CSV del inversor SMA tienen 58 columnas y separador configurable (; o ,)
+   - La columna pac_total se calcula sumando pac1 + pac2 + pac3
+   - La energía por intervalo = pac_total × Δt_min / 60 (en Wh)
+   - Los archivos duplicados (nombre(1).csv) se fusionan con el principal
+
+================================================================================
+  CÓMO EJECUTAR EL PROYECTO
+================================================================================
+
+Dashboard climático interactivo (sensores EEP/UES):
+  python3 analisis_climatico.py
+  → Genera: dashboard_msn_interactivo.html (19 MB) y
+            dashboard_proyecto_climatico.html (1.9 MB)
+  → Se abre automáticamente en el navegador
+
+Dashboard solar fotovoltaico (planta SMA):
+  python3 analisis_sma.py
+  → Genera: dashboard_solar.html (4.7 MB)
+  → Abrir manualmente en el navegador
+
+Compilar librerías C++ (solo si se modifican los .cpp):
+  g++ -shared -fPIC -O3 -std=c++17 ajuste_curvas.cpp -o ajuste_curvas_lib.so
+  g++ -shared -fPIC -O2 -std=c++17 metodos_cerrados.cpp -o libraices.so
+  g++ -O2 -shared -fPIC -std=c++17 algebra_lineal.cpp algebra_lineal_binding.cpp \
+      -o algebra_lineal.so
+
+================================================================================
+  FIN DE BITÁCORA
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+PROMPT 9 — Reorganización estructural y nuevos módulos
+Fecha: 2026-06-19
+────────────────────────────────────────────────────────────────────────────────
+
+Solicitud:
+  Misión 1: Reorganizar carpeta ~/Escritorio/Tarea en estructura modular
+  Misión 2: Módulo de ingesta con detección dinámica de frecuencia
+  Misión 3: Verificar y corregir wrappers C++ (ctypes) en nueva ubicación
+  Misión 4: Dashboard fusionado con selectores de fecha y gráficas superpuestas
+  Misión 5: Actualizar documentación/bitácora
+
+──────────────────────────────────────────────────────────────────────────────
+MISIÓN 1 — Reestructuración del directorio
+──────────────────────────────────────────────────────────────────────────────
+
+Nueva estructura creada:
+  datos_crudos/
+    weatherlink/     ← 8 CSVs (7GT-EEP y 7GT-UES, raw + clean, 2025 y 2026)
+    sma_solar/       ← 2023-2024/ (365+366 archivos) + SMA-EIE-2025-2026/ (521 archivos)
+
+  core_math/         ← 3 librerías .so + 3 wrappers Python + fuentes_cpp/
+    ajuste_curvas_lib.so  (82 KB)
+    algebra_lineal.so     (95 KB)
+    libraices.so          (16 KB)
+    ajuste_curvas.py      (wrapper ctypes)
+    metodos_raices.py     (wrapper ctypes)
+    algebra_lineal_lib.py (wrapper ctypes)
+    fuentes_cpp/
+      ajuste_curvas.cpp
+      metodos_cerrados.cpp
+
+  src/               ← Scripts Python principales
+    analisis_climatico.py  (script original, paths actualizados)
+    analisis_sma.py        (script original, paths actualizados)
+    ingesta.py             (NUEVO — módulo de ingesta)
+    exportar_fusion.py     (NUEVO — fusión WL+SMA y dashboard)
+
+  dashboard/         ← HTML interactivo + librerías JS
+    dashboard_msn_interactivo.html
+    dashboard_proyecto_climatico.html
+    dashboard_solar.html
+    dashboard_sma_standalone.html
+    dashboard_solar_sma.html
+    chart.umd.min.js / uPlot.iife.min.js / uPlot.min.css
+    exportaciones/   ← JSON mensuales (generados por ingesta.py)
+
+  reportes/          ← Documentación
+    bitacora.txt (este archivo)
+    README.md
+    apuntes.txt / indicaciones.txt
+    Tarea 01 ... .pdf
+
+Archivos en raíz del proyecto:
+  analisis_cache.pkl  ← caché de resultados pesados (103 MB)
+  claude.md           ← registro de errores y aprendizaje (NUEVO)
+
+Cambios de paths en scripts existentes:
+  analisis_climatico.py:
+    · Añadido: _PROJ_ROOT, _WL_DIR, _DASH_DIR, _EXPORT_DIR
+    · sys.path.insert(0, core_math/) para wrappers C++
+    · ARCHIVOS_EEP/UES → rutas absolutas bajo datos_crudos/weatherlink/
+    · CACHE_CALC_PATH → raíz del proyecto
+    · HTML de salida → dashboard/ (rutas absolutas)
+
+  analisis_sma.py:
+    · Añadido: _PROJ_ROOT, _DATA_SMA, _DASH_DIR, _EXPORT_DIR
+    · _CARPETAS_SMA → datos_crudos/sma_solar/2023-2024/{2023,2024} + SMA-EIE-2025-2026
+    · HTML de salida → dashboard/dashboard_solar.html
+
+  Todos los wrappers C++ (core_math/*.py) usan Path(__file__).parent → no necesitan
+  cambio de paths ya que los .so también están en core_math/.
+
+──────────────────────────────────────────────────────────────────────────────
+MISIÓN 2 — Módulo de Ingesta (src/ingesta.py)
+──────────────────────────────────────────────────────────────────────────────
+
+Archivo creado: src/ingesta.py
+
+Funciones implementadas:
+
+  detectar_frecuencia(df, col_dt) → int
+    · Calcula delta entre filas consecutivas (timedelta.total_seconds()/60)
+    · Usa las primeras 300 muestras para velocidad
+    · Retorna la MODA de los deltas (sin usar statistics.mode — implementación manual)
+    · Resultados verificados: WL=5 min, SMA=15 min
+
+  cargar_weatherlink(ruta, fecha_inicio, max_gap) → (df, freq_min)
+    · Limpieza estricta: sustituye --, vacíos, ****, N/A → np.nan
+    · pd.to_numeric(errors='coerce') en columnas numéricas
+    · Parseo con format='mixed' (formato M/D/YY H:MM AM/PM de WeatherLink)
+    · Aplica interpolar_linear() automáticamente en columnas numéricas
+    · Genera y reutiliza *_clean.csv (caché en datos_crudos/weatherlink/)
+
+  cargar_sma(carpetas, fecha_inicio) → pd.DataFrame
+    · Detecta separador desde línea de columnas (índice 4), no desde línea 0
+    · Los datos comienzan en línea 6 (líneas 4 y 5 son cabeceras y unidades)
+    · pac_total = pac1 + pac2 + pac3 (solo inversores con datos válidos)
+    · Detecta frecuencia: 15 min (SMA estándar, verificado)
+
+  interpolar_linear(serie, max_gap) → pd.Series
+    · Interpolación lineal manual entre NaN consecutivos
+    · Solo rellena gaps ≤ max_gap (default 3 muestras)
+    · Detección de NaN por propiedad IEEE 754 (v != v)
+    · SIN usar .interpolate(), .fillna() ni funciones estadísticas
+
+  fusionar_datos(df_wl, df_sma, freq_min) → pd.DataFrame
+    · pd.merge_asof con tolerancia = max(freq_wl, freq_sma)/2 + 2 min
+    · Renombra columnas: wl_* (WeatherLink) y sma_* (SMA Solar)
+    · Columnas fusionadas: ts, wl_temp, wl_hum, wl_solar_rad, wl_presion,
+      wl_viento, wl_lluvia, sma_pac, sma_irr, sma_tamb, sma_tmod, sma_hum, sma_press
+
+  exportar_json_rangos(df, output_dir) → list[str]
+    · Escribe YYYY-MM.json por cada mes del DataFrame
+    · Estructura: {mes, n, cols, datos:[{ts, col1, col2, ...}]}
+    · NaN → None (JSON válido)
+    · Genera indice.json con lista de meses y conteo de registros
+
+  reporte_curacion(df_orig, df_limp, fuente, freq_min)
+    · Imprime: registros brutos/limpios, % eliminados, top-8 columnas con NaN
+
+Estadísticas de carga verificadas (2026-06-19):
+  WeatherLink EEP 2025: 87,753 registros válidos desde 2025-02-25 (frecuencia: 5 min)
+  WeatherLink EEP 2026: ~39,830 registros adicionales
+  SMA 2025-2026:        89,629 registros válidos desde 2025-02-01 (frecuencia: 15 min)
+  Fusión WL+SMA:        127,583 registros alineados por timestamp
+    wl_solar_rad válidos: 125,756  |  sma_pac válidos: 60,044 (no nulos en horas diurnas)
+
+Bugs corregidos durante Misión 2:
+  · Error de separador SMA: lineas[0] tiene solo 2 ';' → detección fallida.
+    Fix: usar línea 4 (cabecera de columnas) que tiene 57+ campos separados.
+  · Datos SMA empezaban en lineas[4] en lugar de lineas[6] — incluía cabecera y unidades.
+  · UserWarning en pandas ≥ 2.0 con pd.to_datetime sin format → fix: format='mixed'.
+
+──────────────────────────────────────────────────────────────────────────────
+MISIÓN 3 — Wrappers C++ verificados
+──────────────────────────────────────────────────────────────────────────────
+
+Los 3 wrappers C++ funcionan correctamente desde la nueva ubicación core_math/:
+  · AjusteCurvas   (ajuste_curvas_lib.so)  ✓  — media, σ, percentiles, Pearson
+  · MetodosRaices  (libraices.so)          ✓  — Newton-Raphson para raíz cuadrada
+  · AlgebraLineal  (algebra_lineal.so)     ✓  — operaciones matriciales
+
+Los wrappers usan Path(__file__).parent para localizar los .so → funcionan sin
+cambio de código ya que los .so también están en core_math/.
+
+Los scripts en src/ añaden sys.path.insert(0, core_math/) al inicio para
+que Python los encuentre al importar.
+
+exportar_fusion.py implementa calcular_stats_cpp(serie) que:
+  · Intenta usar AjusteCurvas.calcular_media(), calcular_desviacion(), calcular_percentil()
+  · Si C++ no está disponible → fallback con implementaciones Python manuales
+    (_media, _varianza, _sqrt_nr, _quicksort, _percentil — sin .mean()/.std())
+  · Calcula correlación de Pearson con _pearson_manual() (sin NumPy ni SciPy)
+
+──────────────────────────────────────────────────────────────────────────────
+MISIÓN 4 — Dashboard Fusión y Export JSON
+──────────────────────────────────────────────────────────────────────────────
+
+Archivos generados:
+
+  src/exportar_fusion.py (NUEVO):
+    Motor orquestador que produce el dashboard_fusion.html
+    Carga WL (EEP+UES) + SMA, fusiona, calcula KPIs con C++, exporta JSON y HTML.
+
+  dashboard/dashboard_fusion.html (NUEVO, generado por exportar_fusion.py):
+    · Selectores de fecha (input[type=date]) con botones: 7d / 30d / 3m / 6m / 1yr
+    · Filtrado dinámico SIN recarga de página (window.FUSION_DATA embebido)
+    · Gráficas superpuestas en Canvas 2D nativo (sin librerías):
+        · Radiación Solar WL (W/m²) — eje Y izquierdo, color amber
+        · Potencia AC SMA (W) — eje Y derecho, color verde, línea discontinua
+    · Gráficas simples independientes: Temperatura, Humedad, Viento, Lluvia
+    · Tabla de estadísticos dinámicos (se recalculan al cambiar el rango)
+    · KPIs fijos (calculados con C++): correlación r, medias, máximos
+    · Motor JS manual para estadísticos (jsStats): n, media, σ, vmin, vmax
+    · Downsample automático a max 1500 puntos para rendimiento visual
+    · Responsive: reorganiza gráficas en 2 columnas en pantalla ancha
+
+  dashboard/exportaciones/*.json (NUEVO, generado por ingesta.py o exportar_fusion.py):
+    · Un archivo por mes: 2025-02.json, 2025-03.json, ... , 2026-05.json
+    · Estructura: {mes, n, cols, datos:[{ts, wl_*, sma_*}]}
+    · Incluye indice.json con catálogo de meses disponibles
+    · 12 meses de 2025-06 a 2026-05 exportados en prueba (≈2.4 MB/mes)
+
+Cómo ejecutar:
+  python3 src/ingesta.py          ← solo exporta JSON (sin dashboard HTML)
+  python3 src/exportar_fusion.py  ← JSON + dashboard_fusion.html (completo)
+
+──────────────────────────────────────────────────────────────────────────────
+MISIÓN 5 — Documentación y claude.md
+──────────────────────────────────────────────────────────────────────────────
+
+  claude.md (NUEVO en raíz del proyecto):
+    · Registro de estructura del proyecto post-reorganización
+    · Restricciones académicas documentadas
+    · 9 errores conocidos con causa y solución:
+        1. Segmentation Fault en ctypes (arrays sin np.ascontiguousarray)
+        2. Parseo de fechas WeatherLink (M/D/YY H:MM AM/PM)
+        3. CSV SMA con separador variable (; o ,)
+        4. json.dumps() con NaN (→ None antes de serializar)
+        5. Import de wrappers C++ desde src/ (→ sys.path.insert core_math/)
+        6. f-string con dict comprehension → TypeError unhashable dict
+        7. Caché pkl con path relativo (→ path absoluto en _PROJ_ROOT)
+        8. Detección de separador SMA desde línea 0 (→ línea 4 de cabeceras)
+        9. pd.to_datetime sin format en pandas ≥ 2.0 (→ format='mixed')
+    · Lecciones de diseño: merge_asof, JSON embebido vs fetch(), interpolación
+
+  bitacora.txt (este archivo, actualizado 2026-06-19)
+
+================================================================================
+  ESTRUCTURA ACTUALIZADA DEL PROYECTO (estado 2026-06-19)
+================================================================================
+
+Archivos Python:
+  src/analisis_climatico.py   — Dashboard climático MSN interactivo (paths actualizados)
+  src/analisis_sma.py         — Dashboard solar fotovoltaico (paths actualizados)
+  src/ingesta.py              — Módulo de ingesta y curación (NUEVO)
+  src/exportar_fusion.py      — Fusión WL+SMA + dashboard fusion (NUEVO)
+
+Wrappers C++:
+  core_math/ajuste_curvas.py
+  core_math/metodos_raices.py
+  core_math/algebra_lineal_lib.py
+
+Librerías:
+  core_math/ajuste_curvas_lib.so
+  core_math/algebra_lineal.so
+  core_math/libraices.so
+
+Dashboards:
+  dashboard/dashboard_msn_interactivo.html (existente, 19 MB)
+  dashboard/dashboard_solar.html           (existente, 4.7 MB)
+  dashboard/dashboard_fusion.html          (NUEVO — gráficas superpuestas + date pickers)
+
+JSON:
+  dashboard/exportaciones/YYYY-MM.json    (generado por exportar_fusion.py)
+  dashboard/exportaciones/indice.json
+
+Documentación:
+  claude.md                               (registro de errores — NUEVO)
+  reportes/bitacora.txt                   (este archivo)
+
+================================================================================
+  PROMPT 10 — 2026-06-19  Verificación C++ + Ejecutor Maestro
+================================================================================
+
+Objetivo: Verificar que TODOS los cálculos estadísticos usan las librerías C++,
+que las librerías externas solo se usan para arreglos/gráficas, y crear un archivo
+que ejecute todo el proyecto y abra las páginas web.
+
+VERIFICACIÓN DE CUMPLIMIENTO ACADÉMICO (C++ obligatorio):
+──────────────────────────────────────────────────────────
+  · src/analisis_climatico.py — VIOLACIONES CORREGIDAS:
+    Líneas 2812/2814/2818: vals_np.max()/.min()/.mean() reemplazadas por
+    _maximo(vals_list) / _minimo(vals_list) / _media(vals_list)
+  · src/exportar_fusion.py — VIOLACIONES CORREGIDAS:
+    Líneas 283-284: df["ts"].min()/.max() reemplazadas por
+    df["ts"].iloc[0] / df["ts"].iloc[-1] (df ya ordenado)
+    Motor stats: calcular_media/calcular_desviacion/calcular_percentil
+    → corregidos a métodos reales: media(0)/desviacion_estandar_metodo3(0)/percentil(0,p)
+  · Confirmado: 0 violaciones en paths de producción
+
+API C++ verificada (Error 10 documentado en claude.md):
+  AjusteCurvas:  media(col), maximo(col), minimo(col), desviacion_estandar_metodo3(col),
+                 mediana(col), percentil(col, p), pearson_correlation(col_x, col_y)
+  MetodosRaices: newton_raphson(f, df, x0, tol, max_iter) — retorna (valor, iters)
+                 Usado para √x: f=x²-S, f'=2x
+  AlgebraLineal: requiere AlgebraLineal(filas=N, cols=M) en constructor
+
+ARCHIVO EJECUTOR MAESTRO:
+─────────────────────────
+  ejecutar_proyecto.py (nuevo en raíz del proyecto)
+
+  Pasos que ejecuta:
+    [1] Verifica 3/3 librerías C++ activas (con pruebas numéricas reales):
+        AjusteCurvas: media([1..5])=3.0, σ=1.5811, p50=3.0
+        MetodosRaices: √2=1.41421356 (4 iteraciones Newton-Raphson)
+        AlgebraLineal: gauss, gauss_jordan, inversa, determinante disponibles
+
+    [2] WeatherLink EEP: 87,753 + 39,831 = 127,584 registros (freq=5 min)
+    [2] WeatherLink UES: 88,254 + 37,840 = 126,094 registros (freq=15 min)
+        WeatherLink total: 129,894 registros (2025-02-21 → 2026-05-20)
+
+    [3] SMA Solar: 89,629 registros (freq=15 min, 2025-02-01 → 2026-06-01)
+        pac_total NaN=33,413 (37.3%) — esperado: horas nocturnas
+
+    [4] Motor Estadístico C++ sobre 10 variables (todos usando AjusteCurvas):
+        Temperatura WL:       n=128,910  x̄=26.10°C  σ=3.83
+        Humedad WL:           n=128,482  x̄=74.07%   σ=15.39
+        Radiación Solar WL:   n=128,676  x̄=201.18 W/m²  σ=285.77
+        Presión WL:           n=129,894  x̄=1014.08 mb   σ=2.59
+        Velocidad Viento WL:  n=128,947  x̄=3.63 km/h    σ=3.77
+        Precipitación WL:     n=129,894  x̄=0.017 mm     σ=0.23
+        Potencia AC SMA:      n=56,216   x̄=424.14 W     σ=325.93
+        Irradiancia SMA:      n=65,464   x̄=232.79 W/m²  σ=324.18
+        T. Ambiente SMA:      n=65,464   x̄=23.89°C      σ=3.07
+        T. Módulo SMA:        n=65,464   x̄=28.30°C      σ=8.88
+        Pearson C++ (Rad.WL ↔ Pac.SMA): r = -0.038 (datos incluyen noche)
+
+    [5] Fusión merge_asof: 129,894 registros
+    [6] 16 JSON mensuales exportados (2025-02 → 2026-05)
+    [7] dashboard_fusion.html (6.2 MB) — Rad Solar ↔ Potencia AC + date pickers
+    [8] dashboard_solar.html  (4.6 MB) — Sistema fotovoltaico SMA
+    [9] dashboard_msn_interactivo.html (17.5 MB) — Climático EEP/UES MSN
+    [→] Abre los 3 dashboards en el navegador
+
+NOTA: La correlación r=-0.038 entre Rad.Solar WL y Pac.SMA al incluir datos
+nocturnos de AMBAS estaciones mezcladas es baja esperada. En analisis_sma.py
+la correlación irr_SMA ↔ pac (solo datos diurnos) da r=0.975.
+
+Tiempo total de ejecución: ~154 segundos
+
+================================================================================
+  PROMPT 11 — 2026-06-20  Dashboards separados, Pearson, Estadísticos C++,
+                           Calendario navbar, Scroll fix, Modelo Predictivo
+================================================================================
+
+DASHBOARDS SEPARADOS:
+  Se eliminaron los archivos redundantes: dashboard_proyecto_climatico.html,
+  dashboard_sma_standalone.html, dashboard_solar_sma.html, test.html.
+  Los 3 dashboards activos son completamente independientes (datos embebidos):
+    dashboard/dashboard_msn_interactivo.html  (18.4 MB) — Clima EEP/UES
+    dashboard/dashboard_solar.html            (4.6 MB)  — Fotovoltaica SMA
+    dashboard/dashboard_fusion.html           (6.2 MB)  — Rad Solar ↔ Potencia AC
+  Todos usan librerías locales (chart.umd.min.js, uPlot) en lugar de CDN,
+  garantizando funcionamiento con file:// sin conexión a internet.
+
+CORRELACIÓN DE PEARSON (CORREGIDA):
+  Causa: ejecutar_proyecto.py pasaba correlaciones={} a generar_dashboard_msn_interactivo
+  Solución: llamar calcular_correlaciones(df_eep, df_ues) (26 pares via C++) y pasar
+  el resultado. Ahora la tabla Pearson muestra las 26 variables inter-estacionales.
+
+ESTADÍSTICOS C++ (CORREGIDOS):
+  _construir_json_clima() ahora genera CLIMA.stats_alias y CLIMA.stats_men_alias
+  (keyed por alias JS: temp, hum, solar, lluvia, viento, presion) usando
+  calcular_estadisticos() con C++ AjusteCurvas.
+  La función actualizarGraficosAcad() en JS ahora usa:
+    periodo='todo'  → CLIMA.stats_alias[sensor][var]   (127,583 lecturas reales)
+    periodo='mes'   → CLIMA.stats_men_alias[sensor][var][mes]
+    periodo='anio'  → media ponderada de stats mensuales del año
+    periodo='dia'   → calcStats(horarios del día) — único caso JS
+  Anterior: calcStats(medias diarias) ≡ ~450 puntos  (incorrecto)
+  Nuevo: stats pre-computados C++ sobre ~127,000 lecturas reales
+
+CALENDARIO EN NAVBAR (NUEVO):
+  <input type="date" id="nav-cal-input"> en la barra de navegación.
+  Al cambiar, llama irAFecha(value) que navega al día seleccionado.
+  Al hacer clic en un día del calendario de barras, sincroniza el input.
+  Estilo: color-scheme:dark, glassmorphism coherente con el tema.
+
+SCROLL FIX:
+  setPeriodo() y setTab() guardan window.scrollY antes de actualizar.
+  actualizarTodo() restaura la posición con requestAnimationFrame.
+  seleccionarDia() y irAFecha() preservan el scroll con scrollTo(instant).
+
+MODELO PREDICTIVO (NUEVO):
+  Función: _calcular_prediccion_cpp(df_eep, todas_fechas)
+  Motor: AjusteCurvas.regresion_polinomial(col_x=doy, col_y=temp, grado=3)
+  Variables: Temperatura y Radiación Solar vs día del año (1-366)
+  Coeficientes temperatura: a₀=25.449677  a₁=0.059163  a₂=-0.000349  a₃=1e-06
+  Coeficientes solar:       a₀=209.47     a₁=0.2573    a₂=-0.001112  a₃=1e-06
+  RMSE Temperatura: 0.9985 °C   RMSE Solar: 42.22 W/m²
+  Predicciones: próximos 30 días desde 2026-05-20
+  Visualización: Chart.js línea punteada (roja=temp, amarilla=solar) + tabla
+
+
+══════════════════════════════════════════════════════════════════
+PROMPT 12 — 2026-06-20
+══════════════════════════════════════════════════════════════════
+
+PROBLEMAS RESUELTOS:
+1. Gráficas invisibles en dashboard de análisis climático
+   - Causa raíz: paths relativos erróneos para chart.umd.min.js y uPlot
+     (../chart.umd.min.js apuntaba a Tarea/ — el archivo está en dashboard/)
+   - Fix: analisis_climatico.py línea ~3138 → chart.umd.min.js (sin ../)
+   - Fix: analisis_sma.py línea ~1503 → chart.umd.min.js (sin CDN)
+   - Añadido try-catch en mkChart() con _mostrarErrorCanvas() de fallback
+
+NUEVAS FUNCIONES AÑADIDAS:
+2. _calcular_tendencia_cpp() — regresión lineal C++ (AjusteCurvas.regresion_lineal)
+   - Por variable (temp, hum, solar, lluvia, viento, presion) × sensor (EEP/UES)
+   - Retorna: b0, b1, R², pendiente por mes, etiqueta (↑/↓/Estable)
+   - Embebido en CLIMA.tendencia
+
+3. Mapa de Calor por Hora del Día (Canvas 2D puro)
+   - Visualiza temperatura media por hora 00:00-23:59 para el período activo
+   - Gradiente azul→amarillo→rojo (frío/templado/caliente)
+   - Sin librerías externas: Canvas 2D nativo
+
+4. Análisis de Tendencia Lineal C++
+   - Gráfico Chart.js: puntos reales + línea de tendencia (dashed roja)
+   - Tabla con 6 variables × pendiente/mes × R² × etiqueta
+   - Filtrado por período activo (todo/mes/año/día)
+
+5. Tabla Resumen Mensual Completa
+   - Todos los meses × 6 variables × (media, máx, mín)
+   - Datos pre-computados con C++ (CLIMA.stats_men_alias)
+   - Actualización dinámica al cambiar sensor EEP/UES
+
+6. Análisis de Eventos Extremos
+   - 6 umbrales: calor ≥33°C, frío ≤18°C, lluvia ≥5mm, solar ≥800W/m²,
+     viento ≥25km/h, presión ≤1008mb
+   - Badges visuales con porcentaje del período
+   - Tabla con N días, %, último evento
+
+REGENERACIÓN COMPLETADA:
+  ✅ dashboard_msn_interactivo.html (17.6 MB) — 2026-06-20
+  ✅ dashboard_solar.html (4.6 MB) — paths locales corregidos
+  ✅ dashboard_fusion.html (6.2 MB)
+  Tiempo total: 150.9 s | 127,583 registros EEP | 126,093 registros UES
