@@ -419,7 +419,16 @@ def exportar_y_generar(df_wl, df_sma, freq_wl, freq_sma):
     try:
         from analisis_climatico import (concatenar_estacion,
                                          generar_dashboard_msn_interactivo,
-                                         calcular_correlaciones)
+                                         calcular_correlaciones,
+                                         _cargar_cache, _guardar_cache,
+                                         _hash_archivos,
+                                         calcular_estadisticos,
+                                         calcular_estadisticos_mensuales,
+                                         grafico_comparativo, grafico_serie,
+                                         histograma, boxplot_mensual,
+                                         rosa_de_vientos, grafico_pearson,
+                                         _serie, log2_manual)
+        import math
         WL_DIR = os.path.join(ROOT, "datos_crudos", "weatherlink")
         ARCHIVOS_EEP = [
             os.path.join(WL_DIR, "7GT-EEP_1-1-25_12-00_AM_1_Year_1779324867_v2.csv"),
@@ -429,18 +438,97 @@ def exportar_y_generar(df_wl, df_sma, freq_wl, freq_sma):
             os.path.join(WL_DIR, "7GT-UES_1-1-25_12-00_AM_1_Year_1779324630_v2.csv"),
             os.path.join(WL_DIR, "7GT-UES_1-1-26_12-00_AM_1_Year_1779324751_v2.csv"),
         ]
-        print("  Cargando EEP...")
-        df_eep = concatenar_estacion(ARCHIVOS_EEP)
-        print(f"    → {len(df_eep):,} registros EEP")
-        print("  Cargando UES...")
-        df_ues = concatenar_estacion(ARCHIVOS_UES)
-        print(f"    → {len(df_ues):,} registros UES")
-        print("  Calculando correlaciones de Pearson inter-estacional (C++)...")
-        correlaciones = calcular_correlaciones(df_eep, df_ues)
-        print(f"    → {len(correlaciones)} pares de variables")
+
+        # Intentar cargar desde caché primero
+        hash_actual = _hash_archivos(ARCHIVOS_EEP + ARCHIVOS_UES)
+        cache = _cargar_cache(hash_actual)
+
+        if cache and cache.get("figs"):
+            print("  Usando caché existente con figuras...")
+            df_eep        = cache["df_eep"]
+            df_ues        = cache["df_ues"]
+            figs          = cache["figs"]
+            correlaciones = cache["correlaciones"]
+            print(f"    → {len(df_eep):,} registros EEP · {len(df_ues):,} registros UES")
+            print(f"    → {len(figs)} figuras cargadas desde caché")
+        else:
+            print("  Calculando desde cero (sin caché)...")
+            print("  Cargando EEP...")
+            df_eep = concatenar_estacion(ARCHIVOS_EEP)
+            print(f"    → {len(df_eep):,} registros EEP")
+            print("  Cargando UES...")
+            df_ues = concatenar_estacion(ARCHIVOS_UES)
+            print(f"    → {len(df_ues):,} registros UES")
+
+            figs = {}
+            # Comparativa y series
+            for col, clave, tit, ylabel in [
+                ("Temp - °C", "comp_temp",
+                 "Temperatura Exterior — 7GT-EEP vs 7GT-UES", "Temp (°C)"),
+            ]:
+                figs[clave] = grafico_comparativo(df_eep, df_ues, col, tit, ylabel)
+
+            for col, clave, color, lbl in [
+                ("Temp - °C",         "serie_temp_ues", "#fca5a5", "Temp (°C)"),
+                ("Hum - %",           "serie_hum_ues",  "#93c5fd", "Hum (%)"),
+                ("Barometer - mb",    "serie_bar_ues",  "#6ee7b7", "Bar (mb)"),
+                ("Solar Rad - W/m^2", "serie_solar_ues","#fde68a", "Solar (W/m²)"),
+            ]:
+                if col in df_ues.columns:
+                    figs[clave] = grafico_serie(
+                        df_ues, col,
+                        f"Evolución Temporal: {lbl} (7GT-UES)", lbl, color)
+
+            # Histogramas
+            for df_r, prefijo in [(df_eep, "eep"), (df_ues, "ues")]:
+                for col, key, color in [
+                    ("Temp - °C",             f"hist_temp_{prefijo}",  "#f59e0b"),
+                    ("Hum - %",               f"hist_hum_{prefijo}",   "#3b82f6"),
+                    ("Barometer - mb",        f"hist_bar_{prefijo}",   "#10b981"),
+                    ("Solar Rad - W/m^2",     f"hist_solar_{prefijo}", "#fbbf24"),
+                    ("Avg Wind Speed - km/h", f"hist_wind_{prefijo}",  "#a78bfa"),
+                ]:
+                    if col in df_r.columns:
+                        s = _serie(df_r, col)
+                        if s:
+                            k = math.ceil(log2_manual(len(s)) + 1)
+                            figs[key] = histograma(s, f"{col} ({prefijo.upper()})", col, color)
+
+            # Boxplots
+            for col, clave, tit in [
+                ("Temp - °C",      "box_temp_eep", "Boxplot Mensual — Temperatura (EEP)"),
+                ("Temp - °C",      "box_temp_ues", "Boxplot Mensual — Temperatura (UES)"),
+                ("Hum - %",        "box_hum_ues",  "Boxplot Mensual — Humedad (UES)"),
+                ("Barometer - mb", "box_bar_ues",  "Boxplot Mensual — Presión (UES)"),
+            ]:
+                df_r = df_eep if "eep" in clave else df_ues
+                if col in df_r.columns:
+                    figs[clave] = boxplot_mensual(df_r, col, tit)
+
+            # Rosas de vientos
+            for df_r, clave, tit in [
+                (df_eep, "wind_eep", "Rosa de los Vientos (7GT-EEP)"),
+                (df_ues, "wind_ues", "Rosa de los Vientos (7GT-UES)"),
+            ]:
+                figs[clave] = rosa_de_vientos(df_r, tit)
+
+            print("  Calculando correlaciones de Pearson inter-estacional (C++)...")
+            correlaciones = calcular_correlaciones(df_eep, df_ues)
+            figs["pearson"] = grafico_pearson(correlaciones)
+            print(f"    → {len(correlaciones)} pares · {len(figs)} figuras generadas")
+
+            # Guardar en caché para próximas ejecuciones
+            _guardar_cache({
+                "df_eep": df_eep, "df_ues": df_ues,
+                "st_eep": {}, "st_ues": {},
+                "st_mensual_ues": {},
+                "figs": figs,
+                "correlaciones": correlaciones,
+            }, hash_actual)
+
         salida_msn = os.path.join(DASH, "dashboard_msn_interactivo.html")
         generar_dashboard_msn_interactivo(
-            df_eep, df_ues, figs={}, correlaciones=correlaciones,
+            df_eep, df_ues, figs=figs, correlaciones=correlaciones,
             nombre=salida_msn
         )
         ok(f"dashboard_msn_interactivo.html ({os.path.getsize(salida_msn)/1024/1024:.1f} MB)")
