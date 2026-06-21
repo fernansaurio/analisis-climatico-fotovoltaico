@@ -1499,7 +1499,8 @@ def generar_dashboard_solar_canvas(resultado: dict,
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Dashboard Solar SMA — Planta Fotovoltaica</title>
+<title>Dashboard Solar SMA — Planta Fotovoltaica EIE · Universidad de El Salvador</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="uPlot.min.css">
 <script src="chart.umd.min.js"></script>
 <script src="uPlot.iife.min.js"></script>
@@ -1508,67 +1509,155 @@ def generar_dashboard_solar_canvas(resultado: dict,
   --bg:#050f2e;--card:rgba(255,255,255,.055);--brd:rgba(255,255,255,.09);
   --brd2:rgba(255,255,255,.05);--tx:#e2e8f0;--tx2:#94a3b8;--tx3:#64748b;
   --blue:#38bdf8;--warm:#f59e0b;--green:#10b981;--red:#ef4444;
+  --yellow:#fbbf24;--purple:#a78bfa;
   --r:'Inter',system-ui,sans-serif;
 }}
 *{{box-sizing:border-box;margin:0;padding:0}}
-body{{background:var(--bg);color:var(--tx);font-family:var(--r);min-height:100vh}}
+body{{background:var(--bg);color:var(--tx);font-family:var(--r);min-height:100vh;overflow-x:hidden}}
+
+/* ── Fondo animado ── */
+body::before{{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 900px 600px at 10% 20%, rgba(251,191,36,.07) 0%, transparent 70%),
+    radial-gradient(ellipse 700px 500px at 90% 80%, rgba(16,185,129,.06) 0%, transparent 65%),
+    radial-gradient(ellipse 500px 400px at 50% 50%, rgba(56,189,248,.04) 0%, transparent 70%);
+  animation: bgPulse 12s ease-in-out infinite alternate;
+}}
+@keyframes bgPulse{{
+  0%  {{opacity:.6}}
+  100%{{opacity:1}}
+}}
+
 /* ── Layout ── */
-.navbar{{position:sticky;top:0;z-index:100;background:rgba(5,15,46,.92);
-  backdrop-filter:blur(16px);border-bottom:1px solid var(--brd);
-  padding:10px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}}
+.navbar{{position:sticky;top:0;z-index:100;background:rgba(5,15,46,.93);
+  backdrop-filter:blur(20px);border-bottom:1px solid var(--brd);
+  padding:10px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}}
 .nav-title{{font-size:.8rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
-  color:var(--tx);white-space:nowrap}}
+  color:var(--yellow);white-space:nowrap}}
 .nav-sep{{width:1px;height:22px;background:var(--brd);margin:0 4px;align-self:center}}
 .period-bar{{display:flex;gap:6px;align-items:center}}
 .btn-period{{padding:5px 12px;border-radius:8px;border:1px solid var(--brd);
   background:transparent;color:var(--tx2);font-family:var(--r);font-size:.75rem;cursor:pointer;transition:.2s}}
 .btn-period:hover{{background:rgba(255,255,255,.06)}}
-.btn-period.active{{background:rgba(56,189,248,.15);border-color:var(--blue);color:var(--blue)}}
+.btn-period.active{{background:rgba(251,191,36,.15);border-color:var(--yellow);color:var(--yellow)}}
 .btn-comparar-active{{border-color:rgba(248,113,113,.6)!important;
   background:rgba(248,113,113,.15)!important;color:#f87171!important}}
 .nav-period-label{{font-size:.66rem;color:var(--tx3);white-space:nowrap;
   padding:4px 10px;border-radius:6px;background:rgba(255,255,255,.04);border:1px solid var(--brd2)}}
+.nav-links{{display:flex;gap:6px;margin-left:auto}}
+.nav-link{{padding:4px 11px;border-radius:7px;border:1px solid var(--brd);
+  background:rgba(255,255,255,.03);color:var(--tx2);font-size:.7rem;text-decoration:none;
+  transition:.2s;white-space:nowrap}}
+.nav-link:hover{{background:rgba(255,255,255,.08);color:var(--tx);border-color:rgba(255,255,255,.2)}}
+.nav-link.home{{color:var(--blue);border-color:rgba(56,189,248,.3)}}
+.nav-link.home:hover{{background:rgba(56,189,248,.1)}}
+
+/* ── Hero header ── */
+.hero-solar{{
+  position:relative;z-index:1;
+  background:linear-gradient(135deg,rgba(251,191,36,.10) 0%,rgba(16,185,129,.07) 50%,rgba(5,15,46,0) 100%);
+  border-bottom:1px solid rgba(251,191,36,.12);
+  padding:40px 32px 36px;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:24px;
+}}
+.hero-solar::after{{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(251,191,36,.3),rgba(16,185,129,.2),transparent);
+}}
+.hero-left{{display:flex;flex-direction:column;gap:6px}}
+.hero-badge{{display:inline-flex;align-items:center;gap:6px;
+  background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.25);
+  border-radius:20px;padding:4px 12px;font-size:.68rem;color:var(--yellow);
+  font-weight:600;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px}}
+.hero-badge::before{{content:'';width:7px;height:7px;border-radius:50%;
+  background:var(--yellow);box-shadow:0 0 8px var(--yellow);animation:blink 2s ease-in-out infinite}}
+@keyframes blink{{0%,100%{{opacity:1}}50%{{opacity:.4}}}}
+.hero-title{{font-size:clamp(1.4rem,3vw,2.2rem);font-weight:800;
+  background:linear-gradient(135deg,#fbbf24,#10b981 60%,#38bdf8);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  line-height:1.15}}
+.hero-sub{{font-size:.85rem;color:var(--tx2);margin-top:2px}}
+.hero-loc{{font-size:.75rem;color:var(--tx3);display:flex;align-items:center;gap:5px;margin-top:4px}}
+.hero-right{{display:flex;flex-direction:column;gap:10px;align-items:flex-end}}
+.hero-stat{{text-align:right}}
+.hero-stat-val{{font-size:2.2rem;font-weight:800;color:var(--yellow);
+  font-variant-numeric:tabular-nums;line-height:1;text-shadow:0 0 24px rgba(251,191,36,.4)}}
+.hero-stat-lbl{{font-size:.65rem;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}}
+.hero-badges{{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}}
+.sys-badge{{padding:4px 10px;border-radius:6px;font-size:.68rem;font-weight:600;
+  border:1px solid;white-space:nowrap}}
+
 /* ── Main container ── */
-.main{{max-width:1380px;margin:0 auto;padding:20px 20px 60px}}
+.main{{max-width:1380px;margin:0 auto;padding:24px 20px 80px;position:relative;z-index:1}}
+
+/* ── Section headers ── */
+.sec-divider{{display:flex;align-items:center;gap:14px;margin:32px 0 18px;
+  font-size:.68rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx3)}}
+.sec-divider::before,.sec-divider::after{{content:'';flex:1;height:1px;
+  background:linear-gradient(90deg,rgba(255,255,255,.08),transparent)}}
+.sec-divider::before{{background:linear-gradient(90deg,transparent,rgba(255,255,255,.08))}}
+
 /* ── KPI cards ── */
 .kpi-row{{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px}}
-.kpi{{background:var(--card);border:1px solid var(--brd);border-radius:14px;
-  padding:18px 22px;flex:1;min-width:140px}}
-.kpi-val{{font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums}}
-.kpi-lbl{{font-size:.65rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx3);margin-top:4px}}
+.kpi{{background:var(--card);border:1px solid var(--brd);border-radius:16px;
+  padding:20px 24px;flex:1;min-width:150px;position:relative;overflow:hidden;transition:.2s}}
+.kpi::after{{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:16px 16px 0 0}}
+.kpi.yellow::after{{background:linear-gradient(90deg,var(--yellow),transparent)}}
+.kpi.blue::after  {{background:linear-gradient(90deg,var(--blue),transparent)}}
+.kpi.green::after {{background:linear-gradient(90deg,var(--green),transparent)}}
+.kpi.purple::after{{background:linear-gradient(90deg,var(--purple),transparent)}}
+.kpi:hover{{transform:translateY(-2px);border-color:rgba(255,255,255,.15)}}
+.kpi-val{{font-size:1.7rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}}
+.kpi-sub{{font-size:.75rem;color:var(--tx2);margin-top:4px}}
+.kpi-lbl{{font-size:.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--tx3);margin-top:6px}}
+
 /* ── Calendar ── */
 .cal-section{{margin-bottom:20px}}
 .cal-header{{display:flex;align-items:center;gap:10px;margin-bottom:12px}}
 .cal-label{{font-size:.68rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--tx2)}}
 .cal-nav button{{background:none;border:1px solid var(--brd);color:var(--tx2);
-  border-radius:6px;padding:3px 10px;cursor:pointer;font-size:.85rem}}
-.cal-nav button:hover{{background:rgba(255,255,255,.06)}}
-#cal-month-label{{font-size:.9rem;color:var(--tx);font-weight:500;min-width:130px;text-align:center}}
+  border-radius:6px;padding:3px 10px;cursor:pointer;font-size:.85rem;transition:.2s}}
+.cal-nav button:hover{{background:rgba(255,255,255,.06);color:var(--tx)}}
+#cal-month-label{{font-size:.9rem;color:var(--tx);font-weight:600;min-width:140px;text-align:center}}
 .cal-scroll{{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;
   scrollbar-width:thin;scrollbar-color:var(--brd) transparent}}
-.cal-day{{display:flex;flex-direction:column;align-items:center;min-width:72px;
+.cal-day{{display:flex;flex-direction:column;align-items:center;min-width:76px;
   padding:10px 6px;border-radius:12px;border:1px solid transparent;
   background:rgba(255,255,255,.04);cursor:pointer;transition:.2s}}
-.cal-day:hover{{background:rgba(56,189,248,.08);border-color:rgba(56,189,248,.2)}}
-.cal-day.active{{background:rgba(56,189,248,.16);border-color:rgba(56,189,248,.45)}}
-.cal-day.no-data{{opacity:.35;cursor:not-allowed}}
-.cal-dname{{font-size:.62rem;color:var(--tx3);margin-bottom:2px}}
-.cal-dnum{{font-size:.95rem;font-weight:600}}
-.cal-kwh{{font-size:.72rem;font-weight:600;color:#fbbf24;margin-top:3px}}
-.cal-bar{{width:44px;height:4px;border-radius:2px;background:rgba(251,191,36,.25);
-  margin-top:4px;overflow:hidden}}
-.cal-bar-fill{{height:100%;border-radius:2px;background:#fbbf24;transition:.3s}}
+.cal-day:hover{{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.2)}}
+.cal-day.active{{background:rgba(251,191,36,.15);border-color:rgba(251,191,36,.5);
+  box-shadow:0 0 16px rgba(251,191,36,.15)}}
+.cal-day.no-data{{opacity:.3;cursor:not-allowed}}
+.cal-dname{{font-size:.6rem;color:var(--tx3);margin-bottom:2px;font-weight:500}}
+.cal-dnum{{font-size:1rem;font-weight:700}}
+.cal-kwh{{font-size:.72rem;font-weight:700;color:var(--yellow);margin-top:4px}}
+.cal-bar{{width:44px;height:4px;border-radius:2px;background:rgba(251,191,36,.15);
+  margin-top:5px;overflow:hidden}}
+.cal-bar-fill{{height:100%;border-radius:2px;background:linear-gradient(90deg,#f59e0b,#10b981);transition:.4s}}
+
 /* ── uPlot cards ── */
 .uplot{{width:100%!important}}
 .uplot .u-wrap{{width:100%!important}}
 .uplot-card{{background:var(--card);border:1px solid var(--brd);border-radius:18px;
-  padding:18px 20px;margin-bottom:16px}}
+  padding:20px 22px;margin-bottom:16px;transition:.2s}}
+.uplot-card:hover{{border-color:rgba(255,255,255,.14)}}
 .uplot-title{{font-size:.7rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;
-  color:var(--tx2);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}}
+  color:var(--tx2);margin-bottom:16px;display:flex;align-items:center;justify-content:space-between}}
 .zoom-controls{{display:flex;gap:6px}}
 .zoom-btn{{background:none;border:1px solid var(--brd);color:var(--tx2);
   border-radius:6px;padding:2px 9px;cursor:pointer;font-size:.85rem;transition:.2s}}
-.zoom-btn:hover{{background:rgba(255,255,255,.06);color:var(--tx)}}
+.zoom-btn:hover{{background:rgba(255,255,255,.07);color:var(--tx)}}
+
+/* ── System info banner ── */
+.sys-info{{background:linear-gradient(135deg,rgba(251,191,36,.07),rgba(16,185,129,.05));
+  border:1px solid rgba(251,191,36,.18);border-radius:16px;padding:22px 26px;margin-bottom:24px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px}}
+.si-item{{display:flex;flex-direction:column;gap:4px}}
+.si-label{{font-size:.62rem;color:var(--tx3);letter-spacing:1.5px;text-transform:uppercase;font-weight:700}}
+.si-val{{font-size:.88rem;color:var(--tx);font-weight:500}}
+.si-sub{{font-size:.72rem;color:var(--tx3)}}
+
 /* ── Comparison panel ── */
 .comp-panel{{display:none;margin-bottom:20px;background:rgba(255,255,255,.03);
   border:1px solid var(--brd);border-radius:14px;padding:18px 20px}}
@@ -1580,7 +1669,7 @@ body{{background:var(--bg);color:var(--tx);font-family:var(--r);min-height:100vh
 .date-inp{{background:rgba(255,255,255,.06);border:1px solid var(--brd);border-radius:8px;
   color:var(--tx);font-family:var(--r);font-size:.78rem;padding:6px 10px;
   outline:none;cursor:pointer;transition:.2s;width:100%}}
-.date-inp:focus{{border-color:var(--blue);background:rgba(56,189,248,.07)}}
+.date-inp:focus{{border-color:var(--yellow);background:rgba(251,191,36,.07)}}
 .comp-badge-a{{color:#f87171}}.comp-badge-b{{color:#34d399}}
 .btn-run-comp{{padding:7px 18px;border-radius:8px;
   background:linear-gradient(135deg,rgba(248,113,113,.25),rgba(52,211,153,.25));
@@ -1600,22 +1689,37 @@ body{{background:var(--bg);color:var(--tx);font-family:var(--r);min-height:100vh
 .comp-mini-card{{background:rgba(255,255,255,.04);border:1px solid var(--brd);
   border-radius:10px;padding:12px;flex:1;min-width:200px}}
 .comp-mini-label{{font-size:.65rem;color:var(--tx3);margin-bottom:6px;font-weight:600}}
-.comp-interp{{margin-top:16px;background:rgba(56,189,248,.06);border:1px solid rgba(56,189,248,.15);
+.comp-interp{{margin-top:16px;background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);
   border-radius:10px;padding:14px 16px;font-size:.78rem;color:var(--tx2);line-height:1.6}}
 .comp-interp strong{{color:var(--tx)}}
+
 /* ── Stats grid ── */
 .stats-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:24px}}
-.stat-card{{background:var(--card);border:1px solid var(--brd);border-radius:12px;padding:14px 18px}}
+.stat-card{{background:var(--card);border:1px solid var(--brd);border-radius:12px;padding:14px 18px;transition:.2s}}
+.stat-card:hover{{border-color:rgba(251,191,36,.2)}}
 .stat-name{{font-size:.65rem;color:var(--tx3);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}}
 .stat-row{{display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:3px}}
 .stat-key{{color:var(--tx3)}}.stat-val{{font-weight:600;font-variant-numeric:tabular-nums}}
+
+/* ── Footer ── */
+.site-footer{{
+  position:relative;z-index:1;margin-top:60px;
+  border-top:1px solid var(--brd);
+  padding:28px 32px;
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;
+  background:rgba(0,0,0,.2);
+}}
+.footer-links{{display:flex;gap:14px;flex-wrap:wrap}}
+.footer-link{{color:var(--tx3);font-size:.75rem;text-decoration:none;transition:.2s}}
+.footer-link:hover{{color:var(--tx)}}
+.footer-copy{{font-size:.72rem;color:var(--tx3);text-align:right}}
 </style>
 </head>
 <body>
 
 <!-- ── NAVBAR ── -->
 <div class="navbar">
-  <span class="nav-title">☀️ SMA Solar</span>
+  <span class="nav-title">☀️ SMA Solar EIE</span>
   <div class="nav-sep"></div>
   <div class="period-bar">
     <button class="btn-period active" id="p-dia"  onclick="setPeriodo('dia')">Día</button>
@@ -1624,29 +1728,99 @@ body{{background:var(--bg);color:var(--tx);font-family:var(--r);min-height:100vh
     <button class="btn-period"        id="p-todo" onclick="setPeriodo('todo')">Todo</button>
   </div>
   <button class="btn-period" id="btn-comparar" onclick="toggleComparacion()" title="Comparar dos rangos">📊 Comparar</button>
+  <div class="nav-links">
+    <a class="nav-link home" href="index.html">🏠 Inicio</a>
+    <a class="nav-link" href="dashboard_msn_interactivo.html">🌤 Clima</a>
+    <a class="nav-link" href="dashboard_fusion.html">🔗 Fusión</a>
+  </div>
   <span class="nav-period-label" id="nav-label">—</span>
+</div>
+
+<!-- ── HERO HEADER ── -->
+<div class="hero-solar">
+  <div class="hero-left">
+    <div class="hero-badge">Sistema activo · EIE</div>
+    <div class="hero-title">Sistema Solar Fotovoltaico SMA</div>
+    <div class="hero-sub">Análisis de producción energética 2023 – 2026</div>
+    <div class="hero-loc">📍 Escuela de Ingeniería Eléctrica (EIE) · Universidad de El Salvador, San Salvador</div>
+    <div class="hero-badges" style="margin-top:14px">
+      <span class="sys-badge" style="background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.25);color:var(--yellow)">
+        ☀️ Piranómetro PYRA0102
+      </span>
+      <span class="sys-badge" style="background:rgba(16,185,129,.1);border-color:rgba(16,185,129,.25);color:var(--green)">
+        ⚡ 3 × SMA WR725UAE
+      </span>
+      <span class="sys-badge" style="background:rgba(56,189,248,.1);border-color:rgba(56,189,248,.25);color:var(--blue)">
+        📐 Métodos Numéricos · C++
+      </span>
+    </div>
+  </div>
+  <div class="hero-right">
+    <div class="hero-stat">
+      <div class="hero-stat-val">{etotal_kwh:,.0f}</div>
+      <div class="hero-stat-lbl" style="color:var(--yellow)">kWh acumulados</div>
+    </div>
+    <div class="hero-stat" style="margin-top:10px">
+      <div style="font-size:1.3rem;font-weight:700;color:var(--green)">{r_fmt}</div>
+      <div style="font-size:.6rem;color:var(--tx3);letter-spacing:1px;text-transform:uppercase;margin-top:2px">correlación irr–pac</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SISTEMA INFO ── -->
+<div class="sys-info">
+  <div class="si-item">
+    <div class="si-label">Piranómetro</div>
+    <div class="si-val">PYRA0102 · S/N 158511170</div>
+    <div class="si-sub">Irradiancia · Temperatura · Presión</div>
+  </div>
+  <div class="si-item">
+    <div class="si-label">Inversor 1</div>
+    <div class="si-val">SMA WR725UAE</div>
+    <div class="si-sub">S/N 2000801893</div>
+  </div>
+  <div class="si-item">
+    <div class="si-label">Inversor 2</div>
+    <div class="si-val">SMA WR725UAE</div>
+    <div class="si-sub">S/N 2000801894</div>
+  </div>
+  <div class="si-item">
+    <div class="si-label">Inversor 3</div>
+    <div class="si-val">SMA WR725UAE</div>
+    <div class="si-sub">S/N 2000801917</div>
+  </div>
+  <div class="si-item">
+    <div class="si-label">Período registrado</div>
+    <div class="si-val">2023 – 2026</div>
+    <div class="si-sub">{len(energia_men)} meses de datos</div>
+  </div>
 </div>
 
 <!-- ── CONTENIDO PRINCIPAL ── -->
 <div class="main">
 
 <!-- KPIs -->
+<div class="sec-divider">⚡ Indicadores Clave</div>
 <div class="kpi-row">
-  <div class="kpi">
-    <div class="kpi-val" style="color:#fbbf24">{etotal_kwh:,.1f} kWh</div>
+  <div class="kpi yellow">
+    <div class="kpi-val" style="color:var(--yellow)">{etotal_kwh:,.1f}</div>
+    <div class="kpi-sub" style="color:var(--tx3)">kWh</div>
     <div class="kpi-lbl">Energía total acumulada</div>
   </div>
-  <div class="kpi">
-    <div class="kpi-val" style="color:#38bdf8">{_fmt(st_pac,'media',0)} W</div>
+  <div class="kpi blue">
+    <div class="kpi-val" style="color:var(--blue)">{_fmt(st_pac,'media',0)}</div>
+    <div class="kpi-sub" style="color:var(--tx3)">W</div>
     <div class="kpi-lbl">Potencia AC media</div>
   </div>
-  <div class="kpi">
-    <div class="kpi-val" style="color:#f59e0b">{_fmt(st_irr,'media',1)} W/m²</div>
+  <div class="kpi" style="--accent:var(--warm)">
+    <div class="kpi-val" style="color:var(--warm)">{_fmt(st_irr,'media',1)}</div>
+    <div class="kpi-sub" style="color:var(--tx3)">W/m²</div>
     <div class="kpi-lbl">Irradiancia media</div>
   </div>
-  <div class="kpi">
-    <div class="kpi-val" style="color:#10b981">{r_fmt}</div>
-    <div class="kpi-lbl">Correlación Irr–Pac (r)</div>
+  <div class="kpi green">
+    <div class="kpi-val" style="color:var(--green)">{r_fmt}</div>
+    <div class="kpi-sub" style="color:var(--tx3)">r Pearson</div>
+    <div class="kpi-lbl">Correlación Irr–Pac</div>
   </div>
 </div>
 
@@ -1708,11 +1882,24 @@ body{{background:var(--bg);color:var(--tx);font-family:var(--r);min-height:100vh
 </div>
 
 <!-- ══ ESTADÍSTICOS GLOBALES ══ -->
-<div style="font-size:.68rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;
-  color:var(--tx2);margin:24px 0 12px">📊 Estadísticos globales</div>
+<div class="sec-divider">📊 Estadísticos globales del sistema</div>
 <div class="stats-grid" id="stats-grid"></div>
 
 </div><!-- /main -->
+
+<!-- ── FOOTER ── -->
+<footer class="site-footer">
+  <div class="footer-links">
+    <a class="footer-link" href="index.html">🏠 Inicio</a>
+    <a class="footer-link" href="dashboard_msn_interactivo.html">🌤 Dashboard Climático</a>
+    <a class="footer-link" href="dashboard_fusion.html">🔗 Fusión RadSolar–Potencia</a>
+  </div>
+  <div class="footer-copy">
+    Sistema Solar SMA EIE · Universidad de El Salvador<br>
+    Análisis generado con Python · C++ (Newton-Raphson · QuickSort · Pearson)<br>
+    Datos 2023–2026 · {len(energia_men)} meses registrados
+  </div>
+</footer>
 
 <script>
 // ── Datos embebidos ──────────────────────────────────────────────────
@@ -1798,13 +1985,22 @@ function calNav(dir){{
   if(m > 12){{ m=1; y++; }} else if(m < 1){{ m=12; y--; }}
   calMes = `${{y}}-${{String(m).padStart(2,'0')}}`;
   renderCalendario();
+  // Al cambiar de mes → vista de mes completo
+  periodo = 'mes';
+  document.querySelectorAll('.btn-period').forEach(b=>b.classList.remove('active'));
+  const pm = document.getElementById('p-mes');
+  if(pm) pm.classList.add('active');
+  actualizarGraficos();
+  actualizarNavLabel();
 }}
 
 function seleccionarDia(fecha){{
   diaActivo = fecha;
-  periodo   = 'dia';
+  // Al seleccionar un día concreto → vista de día
+  periodo = 'dia';
   document.querySelectorAll('.btn-period').forEach(b=>b.classList.remove('active'));
-  document.getElementById('p-dia').classList.add('active');
+  const pd = document.getElementById('p-dia');
+  if(pd) pd.classList.add('active');
   renderCalendario();
   actualizarGraficos();
   actualizarNavLabel();

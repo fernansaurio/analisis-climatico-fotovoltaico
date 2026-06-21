@@ -4,7 +4,7 @@
 =======================================================================
 PROYECTO DE PROGRAMACIÓN NUMÉRICA Y ANÁLISIS CLIMÁTICO AVANZADO
 Asignatura: Métodos Numéricos
-Estaciones: 7GT-EEP (San Salvador) y 7GT-UES (San Salvador)
+Estaciones: 7GT-EEP (San Luis Talpa, La Paz) y 7GT-UES (Universidad de El Salvador, San Salvador)
 =======================================================================
 ÁRBOL DE MÓDULOS
 ─────────────────────────────────────────────────────────────────────
@@ -978,9 +978,9 @@ def grafico_comparativo(df_eep: pd.DataFrame, df_ues: pd.DataFrame,
     n = max(len(s_eep), len(s_ues))
 
     ax.plot(list(range(len(s_eep))), s_eep, color=_C["naranja"],
-            linewidth=0.65, alpha=0.8, label="7GT-EEP (San Salvador)")
+            linewidth=0.65, alpha=0.8, label="7GT-EEP (San Luis Talpa)")
     ax.plot(list(range(len(s_ues))), s_ues, color=_C["cyan"],
-            linewidth=0.65, alpha=0.8, label="7GT-UES (San Salvador)")
+            linewidth=0.65, alpha=0.8, label="7GT-UES (Univ. El Salvador)")
 
     ax.legend(facecolor=_C["fondo"], labelcolor=_C["texto"],
               fontsize=8.5, edgecolor="#1e3a5f")
@@ -1338,7 +1338,7 @@ def generar_dashboard_publico(st_eep: dict, st_ues: dict, figs: dict,
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>El Tiempo en San Salvador · Estación UES</title>
+<title>El Tiempo en El Salvador · Estaciones 7GT-EEP &amp; 7GT-UES</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -1739,9 +1739,9 @@ footer b {{ color: var(--tx2); font-weight: 500; }}
   <div class="hdr-loc">
     <div class="loc-line">
       <span class="loc-pin"></span>
-      <span>San Salvador, El Salvador &nbsp;·&nbsp; Estación 7GT-UES</span>
+      <span>El Salvador &nbsp;·&nbsp; 7GT-UES: Univ. El Salvador · 7GT-EEP: San Luis Talpa</span>
     </div>
-    <h1 class="city-name">El Tiempo en San Salvador</h1>
+    <h1 class="city-name">El Tiempo en El Salvador</h1>
     <span class="period-tag">📅 Registro Feb 2025 – 2026</span>
   </div>
   <div class="hdr-clock">
@@ -1766,7 +1766,7 @@ footer b {{ color: var(--tx2); font-weight: 500; }}
   </div>
   <div class="hero-station">
     <div class="station-id">7GT-UES / 7GT-EEP</div>
-    <div class="station-desc">WeatherLink Pro · UES San Salvador</div>
+    <div class="station-desc">WeatherLink Pro · UES San Salvador · San Luis Talpa</div>
   </div>
 </div>
 
@@ -1942,7 +1942,7 @@ footer b {{ color: var(--tx2); font-weight: 500; }}
 <!-- ══ COMPARATIVA EEP vs UES ═══════════════════════════════════════ -->
 <div class="compare-card section">
   <div class="panel-label" style="margin-bottom:14px">
-    📍 Diferencias entre las dos estaciones de San Salvador
+    📍 Diferencias entre las dos estaciones — UES (San Salvador) vs EEP (San Luis Talpa)
   </div>
   <div style="display:grid;grid-template-columns:repeat(3,auto) 1fr;
               font-size:.7rem;color:var(--tx3);gap:0 16px;
@@ -1973,7 +1973,8 @@ footer b {{ color: var(--tx2); font-weight: 500; }}
 
 <!-- ══ FOOTER ════════════════════════════════════════════════════════ -->
 <footer>
-  <b>Estación Meteorológica UES · San Salvador, El Salvador</b><br>
+  <b>Estación 7GT-UES · Universidad de El Salvador, San Salvador</b><br>
+  <b>Estación 7GT-EEP · San Luis Talpa, La Paz, El Salvador</b><br>
   Datos recopilados con WeatherLink Pro · Feb 2025 – 2026<br>
   Análisis estadístico elaborado por el equipo de Métodos Numéricos
 </footer>
@@ -2108,7 +2109,7 @@ def generar_dashboard(st_eep: dict, st_ues: dict, figs: dict,
 <html lang="es"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Dashboard Climático Avanzado — 7GT-EEP &amp; 7GT-UES</title>
+<title>Dashboard Climático — 7GT-EEP San Luis Talpa &amp; 7GT-UES Univ. El Salvador</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:opsz,wght@9..40,300;400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{{
@@ -2298,13 +2299,18 @@ footer{{background:rgba(5,15,46,.6);border-top:1px solid var(--brd2);
   <a href="#box">Boxplots</a>
   <a href="#wind">Rosa de Vientos</a>
   <a href="#pearson">Correlación</a>
+  <span style="flex:1"></span>
+  <a href="index.html" style="color:#38bdf8;border-color:rgba(56,189,248,.3);background:rgba(56,189,248,.07)">🏠 Inicio</a>
+  <a href="dashboard_msn_interactivo.html" style="color:#38bdf8;border-color:rgba(56,189,248,.3);background:rgba(56,189,248,.07)">🌤 Clima</a>
+  <a href="dashboard_solar.html" style="color:#fbbf24;border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.07)">☀️ Solar</a>
+  <a href="dashboard_fusion.html" style="color:#a78bfa;border-color:rgba(167,139,250,.3);background:rgba(167,139,250,.07)">🔗 Fusión</a>
 </nav>
 
 <main>
 
 <!-- KPI CARDS -->
 <section class="sec" id="kpi">
-  <h2 class="sec-h">⚡ Indicadores Clave — 7GT-UES (San Salvador)</h2>
+  <h2 class="sec-h">⚡ Indicadores Clave — 7GT-UES (Univ. El Salvador) · 7GT-EEP (San Luis Talpa)</h2>
   <div class="kpi-grid">
 
     <div class="card kpi">
@@ -2346,8 +2352,8 @@ footer{{background:rgba(5,15,46,.6);border-top:1px solid var(--brd2);
   </div>
 
   <div class="st-badges" style="margin-top:20px">
-    <span class="st-b eep">7GT-EEP — San Salvador</span>
-    <span class="st-b ues">7GT-UES — San Salvador</span>
+    <span class="st-b eep">7GT-EEP — San Luis Talpa</span>
+    <span class="st-b ues">7GT-UES — Univ. El Salvador</span>
   </div>
 
   <!-- Mini comparativa EEP vs UES -->
@@ -3589,6 +3595,21 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
     <button class="btn-period" id="btn-comparar" onclick="toggleComparacion()" title="Comparar dos rangos de tiempo">📊 Comparar</button>
     <!-- Indicador de fecha/período activo -->
     <span class="nav-period-label" id="nav-periodo-label">—</span>
+    <!-- Links a otras páginas -->
+    <div style="display:flex;gap:6px;margin-left:auto">
+      <a href="index.html" style="padding:4px 11px;border-radius:7px;border:1px solid rgba(56,189,248,.3);
+        background:rgba(56,189,248,.07);color:var(--blue);font-size:.7rem;text-decoration:none;
+        white-space:nowrap;transition:.2s" onmouseover="this.style.background='rgba(56,189,248,.15)'"
+        onmouseout="this.style.background='rgba(56,189,248,.07)'">🏠 Inicio</a>
+      <a href="dashboard_solar.html" style="padding:4px 11px;border-radius:7px;border:1px solid rgba(251,191,36,.3);
+        background:rgba(251,191,36,.07);color:#fbbf24;font-size:.7rem;text-decoration:none;
+        white-space:nowrap;transition:.2s" onmouseover="this.style.background='rgba(251,191,36,.15)'"
+        onmouseout="this.style.background='rgba(251,191,36,.07)'">☀️ Solar</a>
+      <a href="dashboard_fusion.html" style="padding:4px 11px;border-radius:7px;border:1px solid rgba(167,139,250,.3);
+        background:rgba(167,139,250,.07);color:#a78bfa;font-size:.7rem;text-decoration:none;
+        white-space:nowrap;transition:.2s" onmouseover="this.style.background='rgba(167,139,250,.15)'"
+        onmouseout="this.style.background='rgba(167,139,250,.07)'">🔗 Fusión</a>
+    </div>
   </div>
 </div>
 
@@ -3936,6 +3957,12 @@ function calNav(dir){{
   if(m > 12){{m=1;  y++;}}
   calMes = {{year:y, month:m}};
   renderizarCalendario();
+  // Al cambiar de mes → vista de mes completo
+  periodo = 'mes';
+  document.querySelectorAll('.btn-period').forEach(b=>b.classList.remove('active'));
+  const pm = document.getElementById('p-mes');
+  if(pm) pm.classList.add('active');
+  actualizarTodo();
 }}
 
 // ── Calendario ──
@@ -3985,6 +4012,11 @@ function seleccionarDia(f, el){{
   diaSelec = f;
   document.querySelectorAll('.cal-day').forEach(e=>e.classList.remove('active'));
   el.classList.add('active');
+  // Al seleccionar un día concreto → vista de día
+  periodo = 'dia';
+  document.querySelectorAll('.btn-period').forEach(b=>b.classList.remove('active'));
+  const pd = document.getElementById('p-dia');
+  if(pd) pd.classList.add('active');
   // Sincronizar input de fecha en navbar
   const inp = document.getElementById('nav-cal-input');
   if(inp) inp.value = f;
