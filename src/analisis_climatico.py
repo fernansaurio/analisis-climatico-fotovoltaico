@@ -5500,19 +5500,27 @@ const _DEBOUNCE_MS = 80;
 
 // ── Calendario rápido: ir a una fecha específica desde el input del navbar ──
 function irAFecha(fechaStr){{
-  if(!fechaStr || !CLIMA.dias[fechaStr]) return;
-  diaSelec = fechaStr;
-  // Cambiar a vista de día sin subir al tope
-  const sy = window.scrollY;
-  periodo = 'dia';
-  document.querySelectorAll('.btn-period').forEach(b=>b.classList.remove('active'));
-  const pd = document.getElementById('p-dia');
-  if(pd) pd.classList.add('active');
-  // Actualizar calendario de días (cal-scroll) sin hacer scroll
-  actualizarCalendario();
+  if(!fechaStr) return;
+  // Aceptar la fecha aunque no tenga datos — ir al mes correcto
+  const parts = fechaStr.split('-').map(Number);
+  if(parts.length !== 3) return;
+  const [y, m] = parts;
+  calMes = {{year: y, month: m}};
+  // Si hay datos para ese día, seleccionarlo; si no, mostrar el mes
+  if(CLIMA.dias[fechaStr] && CLIMA.dias[fechaStr][sensor]) {{
+    diaSelec = fechaStr;
+    periodo = 'dia';
+    document.querySelectorAll('.btn-period').forEach(b=>b.classList.remove('active'));
+    const pd = document.getElementById('p-dia');
+    if(pd) pd.classList.add('active');
+  }} else {{
+    periodo = 'mes';
+    document.querySelectorAll('.btn-period').forEach(b=>b.classList.remove('active'));
+    const pm = document.getElementById('p-mes');
+    if(pm) pm.classList.add('active');
+  }}
+  renderizarCalendario();
   actualizarTodoSinScroll();
-  // Restaurar posición de scroll
-  window.scrollTo({{top: sy, behavior: 'instant'}});
 }}
 
 // Parchear setPeriodo, setTab, setSensor para NO subir al tope
