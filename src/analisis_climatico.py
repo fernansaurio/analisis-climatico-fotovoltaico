@@ -3351,12 +3351,12 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
   background:rgba(255,255,255,.04);cursor:pointer;transition:.2s}}
 .cal-day:hover{{background:rgba(56,189,248,.08);border-color:rgba(56,189,248,.2)}}
 .cal-day.active{{background:rgba(56,189,248,.16);border-color:rgba(56,189,248,.45)}}
-.cal-day.no-data{{opacity:.35;cursor:not-allowed}}
-.cal-dname{{font-size:.62rem;color:var(--tx3);margin-bottom:2px}}
-.cal-dnum{{font-size:.95rem;font-weight:600}}
-.cal-ico{{font-size:1.3rem;margin:3px 0}}
-.cal-tmax{{font-size:.75rem;font-weight:600;color:var(--warm)}}
-.cal-tmin{{font-size:.65rem;color:var(--blue)}}
+.cal-day.no-data{{opacity:.35;cursor:not-allowed;pointer-events:none}}
+.cal-dname{{font-size:.62rem;color:var(--tx3);margin-bottom:2px;pointer-events:none}}
+.cal-dnum{{font-size:.95rem;font-weight:600;pointer-events:none}}
+.cal-ico{{font-size:1.3rem;margin:3px 0;pointer-events:none}}
+.cal-tmax{{font-size:.75rem;font-weight:600;color:var(--warm);pointer-events:none}}
+.cal-tmin{{font-size:.65rem;color:var(--blue);pointer-events:none}}
 
 /* ── Panel de comparativa ── */
 .comp-panel{{display:none;margin-top:16px;background:rgba(255,255,255,.03);
@@ -3946,6 +3946,7 @@ function init(){{
   calMes = {{year:y, month:m}};
   diaSelec = uf;
   renderizarCalendario();
+  _initCalListener();
   actualizarTodo();
 }}
 
@@ -3973,30 +3974,26 @@ function renderizarCalendario(){{
   const scroll = document.getElementById('cal-scroll');
   scroll.innerHTML = '';
 
+  const pad = n => String(n).padStart(2,'0');
   const diasEnMes = new Date(calMes.year, calMes.month, 0).getDate();
-  let hayDias = false;
 
   for(let d=1; d<=diasEnMes; d++){{
-    const pad = n => String(n).padStart(2,'0');
     const f   = `${{calMes.year}}-${{pad(calMes.month)}}-${{pad(d)}}`;
     const obj = CLIMA.dias[f];
-    const dat = obj && obj[sensor] && Object.keys(obj[sensor]).length > 3 ? obj[sensor] : null;
+    const dat = obj && obj[sensor] && Object.keys(obj[sensor]).length > 0 ? obj[sensor] : null;
 
     const diaObj = new Date(calMes.year, calMes.month-1, d);
     const dnom   = DIAS_ES[diaObj.getDay()];
 
     const div = document.createElement('div');
     div.className = 'cal-day' + (!dat ? ' no-data' : '') + (f===diaSelec ? ' active' : '');
+    if(dat) div.dataset.fecha = f;
     div.innerHTML = `
       <span class="cal-dname">${{dnom}}</span>
       <span class="cal-dnum">${{d}}</span>
       <span class="cal-ico">${{dat ? dat.icono||'—' : '·'}}</span>
       <span class="cal-tmax">${{dat && dat.temp_max!=null ? dat.temp_max.toFixed(0)+'°':'—'}}</span>
       <span class="cal-tmin">${{dat && dat.temp_min!=null ? dat.temp_min.toFixed(0)+'°':'—'}}</span>`;
-    if(dat){{
-      div.onclick = ()=>{{ seleccionarDia(f, div); }};
-      hayDias = true;
-    }}
     scroll.appendChild(div);
   }}
 
@@ -4007,11 +4004,22 @@ function renderizarCalendario(){{
   }}
 }}
 
+// Delegación de eventos: un solo listener en el contenedor
+function _initCalListener(){{
+  const scroll = document.getElementById('cal-scroll');
+  if(!scroll || scroll._calInit) return;
+  scroll._calInit = true;
+  scroll.addEventListener('click', function(e){{
+    const dayEl = e.target.closest('.cal-day:not(.no-data)');
+    if(!dayEl || !dayEl.dataset.fecha) return;
+    seleccionarDia(dayEl.dataset.fecha, dayEl);
+  }});
+}}
+
 function seleccionarDia(f, el){{
-  const sy = window.scrollY;
   diaSelec = f;
   document.querySelectorAll('.cal-day').forEach(e=>e.classList.remove('active'));
-  el.classList.add('active');
+  if(el) el.classList.add('active');
   // Al seleccionar un día concreto → vista de día
   periodo = 'dia';
   document.querySelectorAll('.btn-period').forEach(b=>b.classList.remove('active'));

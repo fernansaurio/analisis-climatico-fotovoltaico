@@ -1628,13 +1628,13 @@ body::before{{
 .cal-day:hover{{background:rgba(251,191,36,.08);border-color:rgba(251,191,36,.2)}}
 .cal-day.active{{background:rgba(251,191,36,.15);border-color:rgba(251,191,36,.5);
   box-shadow:0 0 16px rgba(251,191,36,.15)}}
-.cal-day.no-data{{opacity:.3;cursor:not-allowed}}
-.cal-dname{{font-size:.6rem;color:var(--tx3);margin-bottom:2px;font-weight:500}}
-.cal-dnum{{font-size:1rem;font-weight:700}}
-.cal-kwh{{font-size:.72rem;font-weight:700;color:var(--yellow);margin-top:4px}}
+.cal-day.no-data{{opacity:.3;cursor:not-allowed;pointer-events:none}}
+.cal-dname{{font-size:.6rem;color:var(--tx3);margin-bottom:2px;font-weight:500;pointer-events:none}}
+.cal-dnum{{font-size:1rem;font-weight:700;pointer-events:none}}
+.cal-kwh{{font-size:.72rem;font-weight:700;color:var(--yellow);margin-top:4px;pointer-events:none}}
 .cal-bar{{width:44px;height:4px;border-radius:2px;background:rgba(251,191,36,.15);
-  margin-top:5px;overflow:hidden}}
-.cal-bar-fill{{height:100%;border-radius:2px;background:linear-gradient(90deg,#f59e0b,#10b981);transition:.4s}}
+  margin-top:5px;overflow:hidden;pointer-events:none}}
+.cal-bar-fill{{height:100%;border-radius:2px;background:linear-gradient(90deg,#f59e0b,#10b981);transition:.4s;pointer-events:none}}
 
 /* ── uPlot cards ── */
 .uplot{{width:100%!important}}
@@ -1968,12 +1968,12 @@ function renderCalendario(){{
     const nom = semNombre(fecha);
     const div = document.createElement('div');
     div.className = 'cal-day' + (fecha===diaActivo?' active':'') + (!obj?' no-data':'');
+    if(obj) div.dataset.fecha = fecha;
     div.innerHTML = `
       <div class="cal-dname">${{nom}}</div>
       <div class="cal-dnum">${{+num}}</div>
       <div class="cal-kwh">${{obj ? kwh.toFixed(1)+' kWh' : '—'}}</div>
       <div class="cal-bar"><div class="cal-bar-fill" style="width:${{pct}}%"></div></div>`;
-    if(obj) div.onclick = () => seleccionarDia(fecha);
     scroll.appendChild(div);
   }});
 }}
@@ -2398,6 +2398,17 @@ function _drawCompChart(canvas, datA, datB){{
 }}
 
 // ── Arranque ──────────────────────────────────────────────────────────
+function _initCalListener(){{
+  const scroll = document.getElementById('cal-scroll');
+  if(!scroll || scroll._calInit) return;
+  scroll._calInit = true;
+  scroll.addEventListener('click', function(e){{
+    const dayEl = e.target.closest('.cal-day:not(.no-data)');
+    if(!dayEl || !dayEl.dataset.fecha) return;
+    seleccionarDia(dayEl.dataset.fecha);
+  }});
+}}
+
 function init(){{
   const dias = fechasDias();
   if(dias.length){{
@@ -2405,6 +2416,7 @@ function init(){{
     calMes = diaActivo.slice(0,7);
   }}
   renderCalendario();
+  _initCalListener();
   actualizarGraficos();
   renderStatsGrid();
   actualizarNavLabel();

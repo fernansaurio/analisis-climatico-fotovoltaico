@@ -362,10 +362,18 @@ def generar_dashboard_fusion(data_json: dict,
 body{{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
       font-size:14px;line-height:1.5}}
 header{{background:linear-gradient(135deg,#1e3a5f,#0f2444);
-        padding:18px 24px;border-bottom:1px solid var(--brd);
-        display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100}}
+        padding:14px 24px;border-bottom:1px solid var(--brd);
+        display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;flex-wrap:wrap}}
 header h1{{font-size:1.2rem;font-weight:700;color:#fff}}
 header span{{font-size:.8rem;color:var(--muted)}}
+.hdr-nav{{display:flex;gap:8px;margin-left:auto;flex-shrink:0}}
+.hdr-nav a{{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;
+            border-radius:8px;text-decoration:none;font-size:.78rem;font-weight:600;
+            border:1px solid;transition:.2s;white-space:nowrap}}
+.hdr-nav a:hover{{transform:translateY(-1px);opacity:.85}}
+.hdr-link-home{{color:#38bdf8;border-color:rgba(56,189,248,.35);background:rgba(56,189,248,.08)}}
+.hdr-link-clima{{color:#4ade80;border-color:rgba(74,222,128,.35);background:rgba(74,222,128,.08)}}
+.hdr-link-solar{{color:#fbbf24;border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.08)}}
 .container{{max-width:1400px;margin:0 auto;padding:20px}}
 .kpi-row{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px}}
 .kpi{{background:var(--card);border:1px solid var(--brd);border-radius:var(--radius);
@@ -413,14 +421,39 @@ canvas{{width:100%!important}}
 .no-data{{color:var(--muted);font-size:.85rem;text-align:center;padding:40px}}
 footer{{text-align:center;padding:20px;color:var(--muted);font-size:.75rem;
         border-top:1px solid var(--brd);margin-top:30px}}
+.cal-section{{background:var(--card);border:1px solid var(--brd);border-radius:var(--radius);
+              padding:14px 18px;margin-bottom:20px}}
+.cal-header{{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}}
+.cal-label{{font-size:.7rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}}
+.cal-nav button{{background:none;border:1px solid var(--brd);color:var(--muted);
+  border-radius:6px;padding:3px 10px;cursor:pointer;font-size:.85rem;transition:.2s}}
+.cal-nav button:hover{{color:var(--text);border-color:var(--blue)}}
+#cal-month-label{{font-size:.9rem;color:var(--text);font-weight:600;min-width:140px;text-align:center}}
+.cal-scroll{{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;
+  scrollbar-width:thin;scrollbar-color:var(--brd) transparent}}
+.fus-cal-day{{display:flex;flex-direction:column;align-items:center;min-width:64px;
+  padding:8px 5px;border-radius:10px;border:1px solid transparent;
+  background:rgba(255,255,255,.04);cursor:pointer;transition:.2s;user-select:none}}
+.fus-cal-day:hover{{background:rgba(96,165,250,.1);border-color:rgba(96,165,250,.3)}}
+.fus-cal-day.active{{background:rgba(96,165,250,.18);border-color:rgba(96,165,250,.5)}}
+.fus-cal-day.no-data{{opacity:.3;cursor:not-allowed;pointer-events:none}}
+.fus-cal-day>*{{pointer-events:none}}
+.fus-dname{{font-size:.58rem;color:var(--muted);margin-bottom:2px}}
+.fus-dnum{{font-size:.9rem;font-weight:700}}
+.fus-dpac{{font-size:.62rem;color:var(--green);margin-top:3px}}
 </style>
 </head>
 <body>
 <header>
   <div>
-    <h1>☀️ Dashboard Fusión — Clima + Solar</h1>
+    <h1>🔗 Dashboard Fusión — Clima + Solar</h1>
     <span>Estaciones 7GT-EEP / 7GT-UES &nbsp;·&nbsp; SMA EIE &nbsp;·&nbsp;
           {rango.get('min','?')} → {rango.get('max','?')} &nbsp;·&nbsp; {n_dias} días</span>
+  </div>
+  <div class="hdr-nav">
+    <a class="hdr-link-home" href="index.html">🏠 Inicio</a>
+    <a class="hdr-link-clima" href="dashboard_msn_interactivo.html">🌤 Clima</a>
+    <a class="hdr-link-solar" href="dashboard_solar.html">☀️ Solar</a>
   </div>
 </header>
 
@@ -458,6 +491,20 @@ footer{{text-align:center;padding:20px;color:var(--muted);font-size:.75rem;
     <div class="kpi-val amber">{_fmt('wl_solar_rad','media')} W/m²</div>
     <div class="kpi-sub">Máx = {_fmt('wl_solar_rad','vmax')}</div>
   </div>
+</div>
+
+<!-- Calendario por día -->
+<div class="cal-section">
+  <div class="cal-header">
+    <span class="cal-label">📅 Selecciona un día</span>
+    <div class="cal-nav" style="display:flex;align-items:center;gap:8px">
+      <button onclick="calNavFusion(-1)">‹</button>
+      <span id="cal-month-label">—</span>
+      <button onclick="calNavFusion(1)">›</button>
+    </div>
+    <button class="btn sec" onclick="resetDia()" style="margin-left:auto;font-size:.75rem;padding:5px 12px">Ver todo el período</button>
+  </div>
+  <div class="cal-scroll" id="cal-scroll"></div>
 </div>
 
 <!-- Filtros de fecha -->
@@ -512,6 +559,10 @@ footer{{text-align:center;padding:20px;color:var(--muted);font-size:.75rem;
 </div>
 <footer>
   Proyecto Programación Numérica · UES El Salvador · Motor C++: AjusteCurvas, MetodosRaices
+  &nbsp;·&nbsp;
+  <a href="index.html" style="color:var(--blue);text-decoration:none">🏠 Inicio</a> &nbsp;·&nbsp;
+  <a href="dashboard_msn_interactivo.html" style="color:#4ade80;text-decoration:none">🌤 Clima</a> &nbsp;·&nbsp;
+  <a href="dashboard_solar.html" style="color:var(--amber);text-decoration:none">☀️ Solar</a>
 </footer>
 
 <script>
@@ -526,6 +577,8 @@ const RAW = {data_str};
 let _filtroDesde = null;
 let _filtroHasta = null;
 let _charts = {{}};     // canvas id → Chart context
+let _calMes = null;     // 'YYYY-MM' para el calendario de fusión
+let _diaActivo = null;  // 'YYYY-MM-DD' día seleccionado (null = todo el período)
 
 // ═══════════════════════════════════════════════════════════════════
 // UTILIDADES DE FECHA
@@ -539,6 +592,97 @@ function fechaStr(d) {{
 }}
 function addDays(d, n) {{
   const r = new Date(d); r.setDate(r.getDate() + n); return r;
+}}
+
+// ═══════════════════════════════════════════════════════════════════
+// CALENDARIO DE FUSIÓN
+// ═══════════════════════════════════════════════════════════════════
+const _DIAS_ES   = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const _MESES_ES  = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+function _padN(n){{ return String(n).padStart(2,'0'); }}
+
+function renderFusionCal(){{
+  const scroll = document.getElementById('cal-scroll');
+  const lbl    = document.getElementById('cal-month-label');
+  if(!scroll) return;
+  if(!_calMes){{
+    const ks = Object.keys(RAW.dias).sort();
+    if(!ks.length) return;
+    _calMes = ks[ks.length-1].slice(0,7);
+  }}
+  const [y,m] = _calMes.split('-').map(Number);
+  lbl.textContent = _MESES_ES[m-1] + ' ' + y;
+  scroll.innerHTML = '';
+
+  const diasMes = new Date(y, m, 0).getDate();
+  for(let d=1; d<=diasMes; d++){{
+    const f   = `${{y}}-${{_padN(m)}}-${{_padN(d)}}`;
+    const obj = RAW.dias[f];
+    const dnom = _DIAS_ES[new Date(y, m-1, d).getDay()];
+    const div = document.createElement('div');
+    div.className = 'fus-cal-day' + (f===_diaActivo?' active':'') + (!obj?' no-data':'');
+    if(obj) div.dataset.fecha = f;
+    const pac = obj && obj.sma_pac ? obj.sma_pac.reduce((a,v)=>a+(v||0),0)/1000 : null;
+    div.innerHTML = `
+      <div class="fus-dname">${{dnom}}</div>
+      <div class="fus-dnum">${{d}}</div>
+      <div class="fus-dpac">${{pac!=null ? pac.toFixed(1)+' kWh':'—'}}</div>`;
+    scroll.appendChild(div);
+  }}
+  if(_diaActivo){{
+    const d = parseInt(_diaActivo.split('-')[2]);
+    if(scroll.children[d-1]) scroll.children[d-1].scrollIntoView({{inline:'center',behavior:'smooth'}});
+  }}
+}}
+
+function _initFusionCalListener(){{
+  const scroll = document.getElementById('cal-scroll');
+  if(!scroll || scroll._calInit) return;
+  scroll._calInit = true;
+  scroll.addEventListener('click', function(e){{
+    const dayEl = e.target.closest('.fus-cal-day:not(.no-data)');
+    if(!dayEl || !dayEl.dataset.fecha) return;
+    _diaActivo = dayEl.dataset.fecha;
+    // Filtrar al día seleccionado
+    _filtroDesde = _diaActivo;
+    _filtroHasta = _diaActivo;
+    document.getElementById('inp-desde').value = _diaActivo;
+    document.getElementById('inp-hasta').value = _diaActivo;
+    document.querySelectorAll('.pbtn').forEach(b=>b.classList.remove('active'));
+    renderFusionCal();
+    render();
+  }});
+}}
+
+function calNavFusion(dir){{
+  if(!_calMes){{ renderFusionCal(); return; }}
+  let [y,m] = _calMes.split('-').map(Number);
+  m += dir;
+  if(m > 12){{ m=1; y++; }} else if(m < 1){{ m=12; y--; }}
+  _calMes = `${{y}}-${{_padN(m)}}`;
+  _diaActivo = null;
+  renderFusionCal();
+  // Filtrar al mes completo
+  _filtroDesde = `${{_calMes}}-01`;
+  const lastDay = new Date(y, m, 0).getDate();
+  _filtroHasta = `${{_calMes}}-${{_padN(lastDay)}}`;
+  document.getElementById('inp-desde').value = _filtroDesde;
+  document.getElementById('inp-hasta').value = _filtroHasta;
+  document.querySelectorAll('.pbtn').forEach(b=>b.classList.remove('active'));
+  render();
+}}
+
+function resetDia(){{
+  _diaActivo = null;
+  _filtroDesde = null;
+  _filtroHasta = null;
+  document.getElementById('inp-desde').value = RAW.rango.min||'';
+  document.getElementById('inp-hasta').value = RAW.rango.max||'';
+  document.querySelectorAll('.pbtn').forEach(b=>b.classList.remove('active'));
+  renderFusionCal();
+  render();
 }}
 
 // ═══════════════════════════════════════════════════════════════════
@@ -884,6 +1028,8 @@ window.addEventListener('load', ()=>{{
   // Pre-rellenar inputs con rango global
   document.getElementById('inp-desde').value = RAW.rango.min||'';
   document.getElementById('inp-hasta').value = RAW.rango.max||'';
+  renderFusionCal();
+  _initFusionCalListener();
   render();
 }});
 

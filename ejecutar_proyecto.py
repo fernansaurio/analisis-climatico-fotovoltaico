@@ -18,6 +18,7 @@ Orquesta en orden:
 import os
 import sys
 import time
+import shutil
 import webbrowser
 
 # ─── Rutas base ───────────────────────────────────────────────────────
@@ -25,6 +26,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC  = os.path.join(ROOT, "src")
 CORE = os.path.join(ROOT, "core_math")
 DASH = os.path.join(ROOT, "dashboard")
+DOCS = os.path.join(ROOT, "docs")
 EXPO = os.path.join(DASH, "exportaciones")
 
 sys.path.insert(0, SRC)
@@ -602,6 +604,17 @@ def main():
         if ruta and os.path.exists(ruta) and os.path.isfile(ruta):
             print(f"       {ruta} ({os.path.getsize(ruta)/1024/1024:.1f} MB)")
     print()
+
+    # Sincronizar docs/ con dashboard/ para GitHub Pages
+    paso("→", "Sincronizando docs/ para GitHub Pages")
+    os.makedirs(DOCS, exist_ok=True)
+    for fname in ["dashboard_fusion.html", "dashboard_solar.html",
+                  "dashboard_msn_interactivo.html"]:
+        src_path = os.path.join(DASH, fname)
+        dst_path = os.path.join(DOCS, fname)
+        if os.path.exists(src_path):
+            shutil.copy2(src_path, dst_path)
+            ok(f"{fname} → docs/")
 
     # Abrir navegador
     abrir_dashboards(salida_fusion, salida_solar, salida_msn)
