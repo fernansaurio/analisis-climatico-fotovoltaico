@@ -61,6 +61,17 @@ sys.path.insert(0, CORE)
 
 os.makedirs(EXPO, exist_ok=True)
 
+# ── Copiar assets JS/CSS de docs/ → dashboard/ si faltan ──────────────
+# Los archivos chart.umd.min.js, uPlot.iife.min.js y uPlot.min.css se
+# rastrean en docs/ (para GitHub Pages). dashboard/ los necesita localmente.
+_ASSETS = ["chart.umd.min.js", "uPlot.iife.min.js", "uPlot.min.css"]
+for _a in _ASSETS:
+    _dst = os.path.join(DASH, _a)
+    _src = os.path.join(DOCS, _a)
+    if not os.path.exists(_dst) and os.path.exists(_src):
+        os.makedirs(DASH, exist_ok=True)
+        shutil.copy2(_src, _dst)
+
 # ══════════════════════════════════════════════════════════════════════
 # GENERADOR DE INDEX.HTML (funciona en file:// y GitHub Pages)
 # ══════════════════════════════════════════════════════════════════════
