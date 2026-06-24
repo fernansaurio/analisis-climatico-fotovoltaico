@@ -6189,15 +6189,24 @@ def main():
     print("  PROYECTO ANÁLISIS CLIMÁTICO AVANZADO — MÉTODOS NUMÉRICOS")
     print("=" * 70)
 
-    # ── Archivos CSV ──────────────────────────────────────────────────
-    ARCHIVOS_EEP = [
-        os.path.join(_WL_DIR, "7GT-EEP_1-1-25_12-00_AM_1_Year_1779324867_v2.csv"),
-        os.path.join(_WL_DIR, "7GT-EEP_1-1-26_12-00_AM_1_Year_1779324876_v2.csv"),
-    ]
-    ARCHIVOS_UES = [
-        os.path.join(_WL_DIR, "7GT-UES_1-1-25_12-00_AM_1_Year_1779324630_v2.csv"),
-        os.path.join(_WL_DIR, "7GT-UES_1-1-26_12-00_AM_1_Year_1779324751_v2.csv"),
-    ]
+    # ── Archivos CSV (descubrimiento dinámico) ────────────────────────
+    import glob as _glob
+    ARCHIVOS_EEP = sorted(
+        f for f in _glob.glob(os.path.join(_WL_DIR, "7GT-EEP_*.csv"))
+        if not f.endswith("_clean.csv")
+    )
+    ARCHIVOS_UES = sorted(
+        f for f in _glob.glob(os.path.join(_WL_DIR, "7GT-UES_*.csv"))
+        if not f.endswith("_clean.csv")
+    )
+    if not ARCHIVOS_EEP or not ARCHIVOS_UES:
+        faltante = "EEP" if not ARCHIVOS_EEP else "UES"
+        raise FileNotFoundError(
+            f"No se encontraron CSVs WeatherLink {faltante} en:\n  {_WL_DIR}\n"
+            "Ejecuta primero:  python3 ordenar_datos.py"
+        )
+    print(f"  WeatherLink EEP: {len(ARCHIVOS_EEP)} archivo(s)")
+    print(f"  WeatherLink UES: {len(ARCHIVOS_UES)} archivo(s)")
 
     TODOS_CSV = ARCHIVOS_EEP + ARCHIVOS_UES
 

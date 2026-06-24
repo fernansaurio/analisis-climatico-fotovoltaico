@@ -4,9 +4,6 @@ datos_crudos/
 # Cache de cálculos Python
 analisis_cache.pkl
 
-# Compilados C++ (plataforma-específicos)
-*.so
-
 # Python
 __pycache__/
 *.pyc
@@ -15,3 +12,4 @@ __pycache__/
 # Sistema
 .DS_Store
 *.swp
+.~lock.*

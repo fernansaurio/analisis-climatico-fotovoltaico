@@ -55,11 +55,15 @@ sys.path.insert(0, os.path.join(_PROJ_ROOT, "core_math"))
 # CONSTANTES Y CONFIGURACIÓN
 # ═══════════════════════════════════════════════════════════════════════
 
-_CARPETAS_SMA = [
-    os.path.join(_DATA_SMA, "2023-2024", "2023"),
-    os.path.join(_DATA_SMA, "2023-2024", "2024"),
-    os.path.join(_DATA_SMA, "SMA-EIE-2025-2026"),
-]
+def _descubrir_carpetas_sma(raiz: str) -> list:
+    """Devuelve todos los subdirectorios de raiz que contengan CSVs SMA."""
+    carpetas = set()
+    for dirpath, _, filenames in os.walk(raiz):
+        if any(f.lower().endswith(".csv") for f in filenames):
+            carpetas.add(dirpath)
+    return sorted(carpetas)
+
+_CARPETAS_SMA = _descubrir_carpetas_sma(_DATA_SMA)
 
 # Índices de columna en el CSV SMA (58 columnas totales)
 _IDX = {
