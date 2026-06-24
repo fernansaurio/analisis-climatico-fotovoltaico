@@ -440,7 +440,7 @@ def cargar_datos():
     # ── WeatherLink ───────────────────────────────────────────────────
     paso(2, "Cargando y curando datos WeatherLink (EEP + UES)")
     archivos_wl = sorted(
-        f for f in WL_DIR.glob("7GT-*v2.csv") if "_clean" not in f.name
+        f for f in WL_DIR.glob("*.csv") if "_clean" not in f.name
     )
     if not archivos_wl:
         err(f"No se encontraron CSVs WeatherLink en {WL_DIR}")
@@ -448,7 +448,19 @@ def cargar_datos():
 
     dfs_wl, freq_wl = [], 5
     for ruta in archivos_wl:
-        estacion = "EEP" if "EEP" in ruta.name else "UES"
+        # Detectar estación por nombre o contenido del archivo
+        nombre_up = ruta.name.upper()
+        if "EEP" in nombre_up:
+            estacion = "EEP"
+        elif "UES" in nombre_up:
+            estacion = "UES"
+        else:
+            try:
+                with open(ruta, encoding="utf-8", errors="replace") as _fh:
+                    l0 = _fh.readline().strip().strip('"').upper()
+                estacion = "EEP" if "7GT-EEP" in l0 else "UES"
+            except Exception:
+                estacion = "UES"
         print(f"  Procesando {estacion}: {ruta.name}")
         df_c, freq = cargar_weatherlink(str(ruta))
         dfs_wl.append(df_c)
@@ -732,23 +744,43 @@ def exportar_y_generar(df_wl, df_sma, freq_wl, freq_sma):
                                          _serie, log2_manual)
         import math, glob as _glob
         WL_DIR = os.path.join(ROOT, "datos_crudos", "weatherlink")
-        ARCHIVOS_EEP = sorted(
-            f for f in _glob.glob(os.path.join(WL_DIR, "7GT-EEP_*.csv"))
+
+        def _estacion_csv(ruta):
+            """Detecta si un CSV es EEP o UES leyendo su primera línea (igual que auto-sort)."""
+            for enc in ("utf-8", "latin-1"):
+                try:
+                    with open(ruta, encoding=enc, errors="replace") as _f:
+                        l0 = _f.readline().strip().strip('"').upper()
+                    if "7GT-EEP" in l0: return "EEP"
+                    if "7GT-UES" in l0: return "UES"
+                    # fallback por nombre de archivo
+                    bn = os.path.basename(ruta).upper()
+                    if "EEP" in bn: return "EEP"
+                    if "UES" in bn: return "UES"
+                    break
+                except Exception:
+                    continue
+            return None
+
+        _todos_wl = sorted(
+            f for f in _glob.glob(os.path.join(WL_DIR, "*.csv"))
             if not f.endswith("_clean.csv")
         )
-        ARCHIVOS_UES = sorted(
-            f for f in _glob.glob(os.path.join(WL_DIR, "7GT-UES_*.csv"))
-            if not f.endswith("_clean.csv")
-        )
-        if not ARCHIVOS_EEP:
+        ARCHIVOS_EEP = sorted(f for f in _todos_wl if _estacion_csv(f) == "EEP")
+        ARCHIVOS_UES = sorted(f for f in _todos_wl if _estacion_csv(f) == "UES")
+
+        if not ARCHIVOS_EEP and not ARCHIVOS_UES:
             raise FileNotFoundError(
                 f"No se encontró ningún CSV en: {WL_DIR}\n"
-                "Revisa que los archivos 7GT-EEP_*.csv estén en datos_crudos/weatherlink/"
+                "Coloca los archivos WeatherLink (7GT-EEP / 7GT-UES) en datos_crudos/"
             )
+        if not ARCHIVOS_EEP:
+            warn("No se encontraron archivos EEP — dashboard MSN usará solo UES como referencia.")
+            ARCHIVOS_EEP = ARCHIVOS_UES  # usar UES en lugar de EEP para no crashear
         if not ARCHIVOS_UES:
             raise FileNotFoundError(
-                f"No se encontró ningún CSV en: {WL_DIR}\n"
-                "Revisa que los archivos 7GT-UES_*.csv estén en datos_crudos/weatherlink/"
+                f"No se encontró ningún CSV UES en: {WL_DIR}\n"
+                "Revisa que los archivos de la estación 7GT-UES estén en datos_crudos/"
             )
 
         # Intentar cargar desde caché primero
