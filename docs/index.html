@@ -6,82 +6,85 @@
   <title>Dashboards — Análisis Climático y Fotovoltaico</title>
   <style>
     :root {
-      --bg: #0f172a; --card: #1e293b; --brd: #334155;
-      --tx: #e2e8f0; --tx2: #94a3b8; --blue: #38bdf8;
-      --green: #4ade80; --yellow: #fbbf24; --purple: #a78bfa;
+      --bg:#0f172a; --card:#1e293b; --brd:#334155;
+      --tx:#e2e8f0; --tx2:#94a3b8;
+      --blue:#38bdf8; --green:#4ade80; --yellow:#fbbf24; --purple:#a78bfa;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: var(--bg); color: var(--tx);
-      font-family: 'Outfit', 'Segoe UI', sans-serif;
-      min-height: 100vh; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; padding: 32px 16px;
-    }
-    h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 6px; text-align: center; }
-    .sub { color: var(--tx2); font-size: .85rem; margin-bottom: 40px; text-align: center; }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 20px; width: 100%; max-width: 900px;
-    }
-    .card {
-      background: var(--card); border: 1px solid var(--brd);
-      border-radius: 16px; padding: 28px 24px;
-      text-decoration: none; color: inherit;
-      transition: border-color .2s, transform .2s;
-      display: flex; flex-direction: column; gap: 10px;
-    }
-    .card:hover { border-color: var(--blue); transform: translateY(-3px); }
-    .icon { font-size: 2.2rem; }
-    .card-title { font-size: 1.05rem; font-weight: 600; }
-    .card-desc { font-size: .8rem; color: var(--tx2); line-height: 1.5; }
-    .badge {
-      display: inline-block; font-size: .65rem; font-weight: 600;
-      padding: 2px 8px; border-radius: 99px; margin-top: 6px;
-    }
-    footer { margin-top: 48px; color: var(--tx2); font-size: .72rem; text-align: center; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--tx);
+      font-family:'Segoe UI',Arial,sans-serif;
+      min-height:100vh;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;padding:32px 16px}
+    h1{font-size:1.6rem;font-weight:700;margin-bottom:6px;text-align:center}
+    .sub{color:var(--tx2);font-size:.85rem;margin-bottom:40px;text-align:center;line-height:1.6}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+      gap:20px;width:100%;max-width:920px}
+    .card{background:var(--card);border:1px solid var(--brd);border-radius:16px;
+      padding:28px 24px;text-decoration:none;color:inherit;
+      transition:border-color .2s,transform .2s;display:flex;flex-direction:column;gap:10px}
+    .card:hover{border-color:var(--blue);transform:translateY(-3px)}
+    .icon{font-size:2.2rem}
+    .card-title{font-size:1.05rem;font-weight:600}
+    .card-desc{font-size:.8rem;color:var(--tx2);line-height:1.5}
+    .badge{display:inline-block;font-size:.65rem;font-weight:600;
+      padding:2px 8px;border-radius:99px;margin-top:6px}
+    footer{margin-top:48px;color:var(--tx2);font-size:.7rem;text-align:center;line-height:1.9}
+    footer code{color:#475569;font-size:.65rem}
   </style>
 </head>
 <body>
-  <h1>Análisis Climático y Fotovoltaico</h1>
-  <p class="sub">📍 7GT-UES: Universidad de El Salvador, San Salvador &nbsp;·&nbsp; 7GT-EEP: San Luis Talpa, La Paz &nbsp;·&nbsp; SMA Solar: EIE</p>
+  <h1>&#127774; Análisis Climático y Fotovoltaico</h1>
+  <p class="sub">
+    &#128205; 7GT-EEP: San Luis Talpa, La Paz &nbsp;·&nbsp;
+    7GT-UES: Universidad de El Salvador &nbsp;·&nbsp; SMA Solar: EIE<br>
+    AEL115 · Ciclo I-2026 · Facultad de Ingeniería y Arquitectura, UES
+  </p>
 
   <div class="grid">
     <a class="card" href="dashboard_msn_interactivo.html">
-      <div class="icon">🌤</div>
+      <div class="icon">&#127780;</div>
       <div class="card-title">Dashboard Climático</div>
       <div class="card-desc">
-        Análisis estadístico completo de temperatura, humedad, solar, lluvia, viento y presión
-        de las estaciones EEP y UES. Gráficas académicas, tendencia lineal C++,
-        mapa de calor horario, eventos extremos y modelo predictivo.
+        Análisis estadístico completo de temperatura, humedad, radiación solar,
+        lluvia, viento y presión. Gráficas uPlot interactivas, tendencia lineal C++,
+        mapa de calor horario, rosa de vientos, eventos extremos y modelo predictivo.
       </div>
-      <span class="badge" style="background:#0ea5e920;color:#38bdf8">127,583 lecturas · EEP + UES</span>
+      <span class="badge" style="background:#0ea5e920;color:#38bdf8">EEP + UES · Histórico completo</span>
     </a>
 
     <a class="card" href="dashboard_solar.html">
-      <div class="icon">☀️</div>
+      <div class="icon">&#9728;&#65039;</div>
       <div class="card-title">Dashboard Solar SMA</div>
       <div class="card-desc">
-        Producción fotovoltaica del sistema SMA. Potencia AC/DC, energía diaria y mensual,
-        rendimiento, horas de sol pico e irradiancia.
+        Producción fotovoltaica del sistema SMA EIE. Potencia AC/DC,
+        energía diaria y mensual, rendimiento, horas de sol pico e irradiancia.
       </div>
       <span class="badge" style="background:#fbbf2420;color:#fbbf24">Sistema SMA · 2023–2026</span>
     </a>
 
     <a class="card" href="dashboard_fusion.html">
-      <div class="icon">🔗</div>
-      <div class="card-title">Fusión Radiación ↔ Potencia</div>
+      <div class="icon">&#128279;</div>
+      <div class="card-title">Fusión Radiación &#8596; Potencia</div>
       <div class="card-desc">
         Correlación directa entre la radiación solar medida por las estaciones
-        y la potencia generada por el sistema fotovoltaico SMA.
+        climáticas y la potencia generada por el sistema fotovoltaico SMA.
       </div>
       <span class="badge" style="background:#a78bfa20;color:#a78bfa">WeatherLink + SMA fusionados</span>
     </a>
   </div>
 
   <footer>
-    Generado localmente con Python · C++ (AjusteCurvas, MetodosRaices, AlgebraLineal) ·
-    Visualizado con Chart.js y uPlot
+    <div>Generado localmente con Python · C++ (AjusteCurvas, MetodosRaices, AlgebraLineal) · Chart.js · uPlot</div>
+    <div style="margin-top:8px">
+      MAURICIO A. MUÑOZ CONTRERAS <code>MC24021</code> &nbsp;·&nbsp;
+      MARCELO X. MOLINA GOMEZ <code>MG24048</code> &nbsp;·&nbsp;
+      DIEGO J. MENDOZA PRUDENCIO <code>MP24048</code><br>
+      FERNANDO J. PADILLA CRUZ <code>PC24039</code> &nbsp;·&nbsp;
+      OSCAR M. VELASQUEZ VILLANUEVA <code>VV24002</code>
+    </div>
+    <div style="margin-top:6px;font-size:.62rem;color:#4b5563">
+      &copy; 2026 · Universidad de El Salvador, Facultad de Ingeniería y Arquitectura
+    </div>
   </footer>
 </body>
 </html>

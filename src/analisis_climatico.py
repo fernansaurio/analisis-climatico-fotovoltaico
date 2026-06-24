@@ -5232,6 +5232,9 @@ function actualizarGraficosAcad(datos){{
 
   // ── 10) COMPARATIVA EEP vs UES (uPlot interactivo) ─────────────────
   actualizarCompUPlot(datos);
+
+  // ── 11) ROSA DE VIENTOS — reactiva según período ─────────────────
+  try {{ actualizarRosaVientos(datos); }} catch(e) {{}}
 }}
 
 // ══ MAPA DE CALOR POR HORA DEL DÍA (Canvas 2D) ══════════════════════
@@ -5769,13 +5772,76 @@ function _resaltarSector(ctx, cx, cy, maxR, maxPct, idx, datos, dpr) {{
   ctx.restore();
 }}
 
+// Calcula rosa de vientos desde los días filtrados actuales (datos diarios de CLIMA.dias)
+function calcularRosaLocal(fechas, sensorKey) {{
+  const RUMBOS = ["N","NNE","NE","ENE","E","ESE","SE","SSE",
+                  "S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  const freq   = {{}};
+  const vSum   = {{}};
+  const vCnt   = {{}};
+  const vMax   = {{}};
+  RUMBOS.forEach(r => {{ freq[r]=0; vSum[r]=0; vCnt[r]=0; vMax[r]=0; }});
+
+  for(const fecha of fechas) {{
+    const d = CLIMA.dias[fecha]?.[sensorKey];
+    if(!d) continue;
+    const dir = d.dir_viento;
+    const vel = d.viento;
+    if(dir && RUMBOS.includes(dir)) {{
+      freq[dir]++;
+      if(vel != null && !isNaN(vel)) {{
+        const fv = parseFloat(vel);
+        vSum[dir] += fv;
+        vCnt[dir]++;
+        if(fv > vMax[dir]) vMax[dir] = fv;
+      }}
+    }}
+  }}
+
+  const total = RUMBOS.reduce((s,r) => s+freq[r], 0) || 1;
+  const result = {{}};
+  RUMBOS.forEach(r => {{
+    result[r] = {{
+      pct:     Math.round(freq[r] / total * 10000) / 100,
+      vel_med: vCnt[r] > 0 ? Math.round(vSum[r] / vCnt[r] * 100) / 100 : 0,
+      vel_max: Math.round(vMax[r] * 100) / 100,
+      n:       freq[r],
+    }};
+  }});
+  return result;
+}}
+
+function actualizarRosaVientos(datos) {{
+  // Obtener lista de fechas filtradas para cada sensor
+  const fechasEEP = fechasConSensor('EEP').filter(f => {{
+    // En modo día solo la fecha seleccionada, en otros el rango activo
+    const primerFecha = datos[0]?.fecha;
+    const ultFecha    = datos[datos.length-1]?.fecha;
+    return primerFecha && ultFecha ? (f >= primerFecha && f <= ultFecha) : true;
+  }});
+  const fechasUES = fechasConSensor('UES').filter(f => {{
+    const primerFecha = datos[0]?.fecha;
+    const ultFecha    = datos[datos.length-1]?.fecha;
+    return primerFecha && ultFecha ? (f >= primerFecha && f <= ultFecha) : true;
+  }});
+
+  const rosaEEP = calcularRosaLocal(fechasEEP, 'EEP');
+  const rosaUES = calcularRosaLocal(fechasUES, 'UES');
+
+  dibujarRosaVientos('wind-rose-eep', rosaEEP, 'tip-wind-eep');
+  dibujarRosaVientos('wind-rose-ues', rosaUES, 'tip-wind-ues');
+}}
+
 function initRosaVientos() {{
-  if(!CLIMA.rosa) return;
-  dibujarRosaVientos('wind-rose-eep', CLIMA.rosa.EEP, 'tip-wind-eep');
-  dibujarRosaVientos('wind-rose-ues', CLIMA.rosa.UES, 'tip-wind-ues');
+  // Arranque: usar datos históricos completos de CLIMA.rosa
+  const rosaEEP = CLIMA.rosa?.EEP;
+  const rosaUES = CLIMA.rosa?.UES;
+  if(rosaEEP) dibujarRosaVientos('wind-rose-eep', rosaEEP, 'tip-wind-eep');
+  if(rosaUES) dibujarRosaVientos('wind-rose-ues', rosaUES, 'tip-wind-ues');
   window.addEventListener('resize', () => {{
-    dibujarRosaVientos('wind-rose-eep', CLIMA.rosa.EEP, 'tip-wind-eep');
-    dibujarRosaVientos('wind-rose-ues', CLIMA.rosa.UES, 'tip-wind-ues');
+    const r = CLIMA.rosa;
+    if(r?.EEP) dibujarRosaVientos('wind-rose-eep', r.EEP, 'tip-wind-eep');
+    if(r?.UES) dibujarRosaVientos('wind-rose-ues', r.UES, 'tip-wind-ues');
   }});
 }}
 
