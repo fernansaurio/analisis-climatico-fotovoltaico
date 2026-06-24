@@ -5253,7 +5253,7 @@ function actualizarGraficosAcad(datos){{
   try {{ renderTendencia(datos, clave, color, unit); }} catch(e) {{}}
 
   // ── 8) TABLA MENSUAL COMPLETA ───────────────────────────────────────
-  try {{ renderTablaMensual(); }} catch(e) {{}}
+  try {{ renderTablaMensual(); }} catch(e) {{ console.error('[renderTablaMensual]', e); }}
 
   // ── 9) EVENTOS EXTREMOS ────────────────────────────────────────────
   try {{ renderEventosExtremos(datos); }} catch(e) {{}}
