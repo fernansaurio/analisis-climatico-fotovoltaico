@@ -310,7 +310,6 @@ def seccion_introduccion(pdf):
         "serie temporal de temperatura, usando la biblioteca C++ AjusteCurvas.",
         "Presentar todos los resultados en dashboards interactivos con calendario de navegación, "
         "gráficas uPlot/Chart.js, rosa de los vientos, mapas de calor y estadísticos dinámicos.",
-        "Publicar el proyecto completo en GitHub Pages para acceso público y reproducible.",
     ]:
         pdf.item(obj)
         pdf.espacio(1)
@@ -484,12 +483,16 @@ def seccion_metodos(pdf):
         "de ese par hora-mes. Visualiza los patrones diurnos estacionales."
     )
 
-    pdf.subtitulo("3.8 Sistema de Caché MD5")
+    pdf.subtitulo("3.8 Optimización del Pipeline — Caché por Hash")
     pdf.parrafo(
-        "Para evitar recalcular los estadísticos en cada ejecución (pipeline: ~75 segundos), "
-        "se implementó un sistema de caché basado en el hash MD5 de los archivos CSV de "
-        "entrada. Los resultados se serializan con pickle (analisis_cache.pkl). Si los "
-        "archivos CSV no cambian, el análisis se omite y se usan los resultados almacenados."
+        "Para gestionar el costo computacional del pipeline completo (~75 segundos de "
+        "ejecución), se implementó una estrategia de caché basada en el hash MD5 de los "
+        "archivos CSV de entrada. Al iniciar, el sistema calcula el hash de cada archivo de "
+        "datos; si el valor coincide con el almacenado en analisis_cache.pkl, se reutilizan "
+        "los resultados previamente calculados sin repetir el análisis. Este mecanismo "
+        "redujo el tiempo de iteración de desarrollo a menos de 5 segundos en ejecuciones "
+        "sin cambios en los datos, permitiendo enfocarse en el ajuste de los dashboards "
+        "sin penalizar el ciclo de prueba."
     )
 
 
@@ -660,79 +663,145 @@ def seccion_bitacora(pdf):
     pdf.titulo_seccion(6, "Bitácora de Desarrollo del Sistema")
 
     pdf.parrafo(
-        "En esta sección se describe cronológicamente el proceso de desarrollo del sistema, "
-        "incluyendo las decisiones técnicas tomadas, los problemas encontrados y las "
-        "soluciones implementadas durante cada fase del proyecto."
+        "El proyecto se desarrolló en dos etapas: el análisis climático, iniciado el "
+        "23 de mayo de 2026 con datos WeatherLink disponibles desde el 21 de mayo; y el "
+        "análisis solar fotovoltaico, incorporado el 1 de junio de 2026 cuando los datos "
+        "SMA fueron subidos al sistema. Aunque ambas partes constituyen tareas independientes "
+        "en su origen, se integraron en un único proyecto para facilitar su lectura y "
+        "presentación conjunta. El desarrollo completo abarca del 23 de mayo al 23 de junio de 2026."
     )
 
-    pdf.subtitulo("6.1 Fase I — Carga y Curado de Datos")
+    pdf.subtitulo("Análisis Climático — WeatherLink  (21 may 2026 – 23 jun 2026)")
+
+    pdf.subtitulo("6.1 Fase I — Exploración y Carga de Datos WeatherLink  [23 may – 29 may 2026]")
     for item in [
-        "Se identificaron los archivos CSV de WeatherLink con cinco filas de cabecera no "
-        "estándar, requiriendo el parámetro skiprows=5 en pandas para su lectura correcta.",
-        "Se implementó la detección automática de la frecuencia de muestreo calculando la "
-        "moda de las diferencias temporales entre registros consecutivos, sin usar .mode().",
-        "Se diseñó el algoritmo de interpolación lineal con ventana máxima de 6 registros "
-        "(30 minutos), preservando los huecos mayores como NaN para no distorsionar el análisis.",
-        "Los archivos de múltiples meses se concatenaron, ordenaron y se eliminaron duplicados, "
-        "resultando en series continuas de 15 minutos para cada estación.",
+        "El 23 de mayo se inició la exploración de los archivos CSV descargados desde el "
+        "servicio WeatherLink, correspondientes a las estaciones 7GT-EEP (San Luis Talpa) "
+        "y 7GT-UES (UES). Los archivos presentaban cinco filas de cabecera no estándar, "
+        "por lo que se configuró skiprows=5 en pandas para obtener el DataFrame correctamente.",
+        "Se identificaron 11 variables numéricas por registro: temperatura, humedad, presión, "
+        "radiación solar, viento, precipitación, índice de calor, punto de rocío, UV, "
+        "evapotranspiración y dirección del viento. Se verificó manualmente que la frecuencia "
+        "de muestreo fuera de 15 minutos, calculando la moda de diferencias temporales sin .mode().",
+        "Se detectaron valores faltantes (NaN) distribuidos irregularmente. Se diseñó un "
+        "algoritmo de interpolación lineal por tramos con ventana máxima de 6 registros "
+        "(30 minutos): si el hueco tiene valores válidos en ambos extremos dentro del límite, "
+        "se interpola linealmente; de lo contrario se preserva como NaN.",
+        "Los archivos de múltiples meses se concatenaron por estación, se ordenaron "
+        "cronológicamente y se eliminaron duplicados, resultando en series continuas de "
+        "15 minutos con aproximadamente 129,894 registros totales entre ambas estaciones.",
+        "Se implementó un sistema de caché basado en hash MD5 de los archivos CSV. Al no "
+        "detectar cambios, el pipeline recupera los resultados desde analisis_cache.pkl "
+        "reduciendo el tiempo de ejecución de ~75 s a menos de 5 s.",
     ]:
         pdf.item(item)
         pdf.espacio(1)
 
-    pdf.subtitulo("6.2 Fase II — Motor Estadístico C++")
+    pdf.subtitulo("6.2 Fase II — Métodos Numéricos y Biblioteca C++  [30 may – 7 jun 2026]")
     for item in [
-        "Se compilaron tres bibliotecas C++ compartidas (.so): AjusteCurvas (regresión lineal "
-        "y polinomial), MetodosRaices (Newton-Raphson) y AlgebraLineal (Pearson, sistemas lineales).",
-        "Se integraron con Python vía ctypes, definiendo prototipos de funciones y tipos de "
-        "datos. Precisión verificada: diferencia < 10⁻¹² respecto a implementación Python manual.",
-        "Las funciones C++ operan sobre arrays de double pasados por puntero, procesando los "
-        "~130,000 registros en milisegundos.",
+        "Se implementaron en Python puro, con bucles explícitos, los siguientes métodos: "
+        "media aritmética, varianza muestral con corrección de Bessel (n−1), percentiles "
+        "Q1/Q2/Q3 mediante QuickSort propio, moda por conteo manual y correlación de "
+        "Pearson. No se usaron .mean(), .std(), .var(), .median(), .quantile() ni .describe().",
+        "Se compilaron tres bibliotecas C++ (.so): AjusteCurvas (regresión lineal y "
+        "polinomial con eliminación gaussiana con pivoteo parcial), MetodosRaices "
+        "(Newton-Raphson para raíz cuadrada y ceros) y AlgebraLineal (correlación de "
+        "Pearson sobre arreglos de double). Se integraron con Python vía ctypes.",
+        "La precisión numérica se verificó comparando los resultados de C++ contra la "
+        "implementación Python manual: diferencias menores a 10⁻¹² en todos los casos.",
+        "Se ajustó regresión lineal sobre promedios mensuales de temperatura (tendencia "
+        "a largo plazo) y un polinomio de grado 3 sobre la serie diaria para el modelo "
+        "predictivo de 30 días. Se calcularon matrices de correlación inter-variable e "
+        "inter-estacional de temperatura y radiación solar.",
     ]:
         pdf.item(item)
         pdf.espacio(1)
 
-    pdf.subtitulo("6.3 Fase III — Generación de Dashboards HTML")
+    pdf.subtitulo("6.3 Fase III — Dashboard Climático MSN Interactivo  [6 jun – 14 jun 2026]")
     for item in [
-        "Se diseñó el dashboard climático con estilo MSN Weather: calendario interactivo de "
-        "días con íconos del clima, temperatura máx/mín y navegación por meses.",
-        "Se implementaron gráficas uPlot (temperatura+humedad y solar) con zoom interactivo, "
-        "y figuras estáticas matplotlib (rosa de vientos, histograma, boxplot, correlación "
-        "Pearson) embebidas como base64 PNG directamente en el HTML.",
-        "El dashboard solar se desarrolló con la misma estructura: calendario con producción "
-        "en kWh por día, gráficas de potencia AC e irradiancia, y estadísticos dinámicos.",
-        "Se creó el dashboard de fusión con datos sincronizados WeatherLink y SMA: "
-        "superposición de radiación solar vs potencia AC, con filtros de fecha interactivos "
-        "y un calendario mensual para selección de días específicos.",
-        "Se agregaron enlaces de navegación entre las tres páginas y un índice (index.html) "
-        "con tarjetas descriptivas de cada dashboard.",
+        "Se desarrolló dashboard_msn_interactivo.html con diseño inspirado en MSN Weather: "
+        "encabezado con selector de estación (EEP/UES), selector de período (día/mes/año/total) "
+        "e input de navegación directa por fecha en la barra superior.",
+        "Se implementó el calendario interactivo de días con ícono del clima, temperatura "
+        "máx/mín e indicador de precipitación. Permite navegar entre meses y seleccionar "
+        "un día específico para ver el análisis aislado de esa jornada.",
+        "Se integraron gráficas uPlot: serie temporal de temperatura y humedad con doble "
+        "eje Y, y radiación solar acumulada diaria. Responden al período y permiten zoom.",
+        "Se generaron y embebieron como base64 PNG las figuras matplotlib: rosa de los "
+        "vientos, histograma de temperatura, boxplot mensual, mapa de calor horario y "
+        "matriz de correlación. En total, 22 figuras para ambas estaciones.",
+        "El panel de estadísticos dinámicos muestra en tiempo real: media, desviación "
+        "estándar, mínimo, máximo, percentiles Q1/Q3 y correlación inter-estacional, "
+        "actualizándose según el período seleccionado.",
     ]:
         pdf.item(item)
         pdf.espacio(1)
 
-    pdf.subtitulo("6.4 Fase IV — Corrección de Errores")
+    pdf.add_page()
+    pdf.subtitulo("Análisis Solar Fotovoltaico — SMA  (1 jun 2026 – 23 jun 2026)")
+
+    pdf.subtitulo("6.4 Fase IV — Carga y Procesamiento de Datos SMA  [1 jun – 7 jun 2026]")
+    for item in [
+        "El 1 de junio se incorporaron los archivos CSV del sistema SMA: tres inversores "
+        "WR725UAE y el piranómetro Hukseflux PYRA01-C2 de la EIE-UES. Los archivos "
+        "usaban separación por punto y coma, formato de fecha europeo y resolución mixta, "
+        "requiriendo una etapa de normalización y remuestreo a intervalos de 15 minutos.",
+        "Se procesó cada inversor por separado y se calculó la potencia AC total como "
+        "suma de los tres en cada intervalo. Se aplicó el mismo algoritmo de interpolación "
+        "lineal (ventana 30 min) para cubrir cortes de comunicación entre el datalogger "
+        "y los inversores.",
+        "Se calculó la energía diaria en kWh mediante integración por el método del "
+        "trapecio sobre la curva de potencia AC. Se obtuvieron también: potencia máxima "
+        "diaria, irradiancia máxima y horas de sol efectivas (irradiancia > 10 W/m²).",
+        "Se calculó la correlación de Pearson entre irradiancia del piranómetro y potencia "
+        "AC total: r = −0.038 sobre el conjunto global y r > 0.85 filtrando horas con "
+        "irradiancia > 50 W/m² (horas de sol productivas).",
+    ]:
+        pdf.item(item)
+        pdf.espacio(1)
+
+    pdf.subtitulo("6.5 Fase V — Dashboard Solar y Dashboard de Fusión  [8 jun – 17 jun 2026]")
+    for item in [
+        "Se desarrolló dashboard_solar.html con calendario mensual que muestra la energía "
+        "en kWh por día mediante barras de color proporcional, panel de estadísticos "
+        "globales y gráficas uPlot de potencia AC e irradiancia en el período seleccionado.",
+        "Se implementó el calendario de días solares con: energía producida en kWh, "
+        "barra proporcional al máximo del período e ícono de categoría de rendimiento. "
+        "Usa el mismo sistema de clic delegado que el dashboard climático.",
+        "Se construyó dashboard_fusion.html combinando datos WeatherLink y SMA en una "
+        "misma vista sincronizada. Un gráfico Canvas 2D superpone la radiación solar "
+        "WeatherLink con la potencia AC del sistema SMA, con selector de rango de fechas, "
+        "calendario mensual y correlación de Pearson dinámica sobre el período visible.",
+        "Se creó index.html como página de inicio del proyecto, con tarjetas descriptivas "
+        "de los tres dashboards y enlaces de acceso directo a cada uno.",
+    ]:
+        pdf.item(item)
+        pdf.espacio(1)
+
+    pdf.subtitulo("6.6 Fase VI — Corrección de Errores y Ajustes Finales  [18 jun – 23 jun 2026]")
     errores = [
-        ("Rosa de vientos no visible",
-         "El script ejecutar_proyecto.py pasaba figs={} (diccionario vacío) al generador "
-         "del dashboard climático. Solución: se agregó la carga del caché o regeneración "
-         "completa de las 22 figuras matplotlib antes de llamar a "
-         "generar_dashboard_msn_interactivo(). Resultado: wind_eep (289 KB) y wind_ues "
-         "(245 KB) embebidos correctamente como base64 PNG."),
-        ("Calendario de días no respondía a clics",
-         "Los clics en los elementos <span> internos del día (nombre, temperatura) no "
-         "llegaban al onclick del <div> padre por interferencia de propagación de eventos. "
-         "Solución: se implementó delegación de eventos con un único listener en el "
-         "contenedor #cal-scroll usando closest(), y se agregó pointer-events:none a todos "
-         "los elementos hijos. También se cambió el atributo data-fecha para almacenar la "
-         "fecha en el elemento en lugar de usar closures en bucles."),
-        ("Input de fecha en navbar (nav-cal-input) no actualizaba los gráficos",
-         "La función irAFecha() llamaba a actualizarCalendario() que no estaba definida en "
-         "el scope. Solución: se corrigió la llamada a renderizarCalendario() (nombre real "
-         "de la función) y se agregó la actualización de la variable calMes para navegar al "
-         "mes correspondiente a la fecha seleccionada."),
-        ("Archivos HTML en docs/ no se actualizaban automáticamente",
-         "El script generaba en dashboard/ pero GitHub Pages sirve desde docs/. Solución: "
-         "se agregó un paso de sincronización en ejecutar_proyecto.py usando shutil.copy2() "
-         "que copia los tres dashboards de dashboard/ a docs/ después de cada regeneración."),
+        ("Rosa de vientos no visible en el dashboard climático",
+         "Al ejecutar el pipeline completo, las figuras de la rosa de vientos no aparecían. "
+         "El script ejecutar_proyecto.py llamaba al generador pasando figs={} vacío, "
+         "omitiendo las 22 figuras matplotlib ya calculadas. Solución: se reestructuró el "
+         "flujo para cargar el caché antes de llamar a generar_dashboard_msn_interactivo(), "
+         "garantizando que wind_eep (289 KB) y wind_ues (245 KB) se transfieran correctamente."),
+        ("Calendario de días no respondía a los clics del usuario",
+         "Los clics sobre los <span> internos (nombre del día, temperatura) no propagaban "
+         "el evento al <div> padre con el onclick registrado. Solución: se eliminaron todos "
+         "los manejadores onclick individuales y se implementó un único listener delegado "
+         "en #cal-scroll usando e.target.closest('.cal-day'), más pointer-events:none "
+         "en todos los elementos hijos para evitar interferencias."),
+        ("El input de fecha en la barra de navegación (nav-cal-input) no actualizaba nada",
+         "La función irAFecha() llamaba a actualizarCalendario(), función inexistente. "
+         "Solución: se corrigió a renderizarCalendario() y se agregó la actualización "
+         "de calMes con el año y mes de la fecha seleccionada, para que el calendario "
+         "navegue automáticamente al mes correcto antes de renderizarse."),
+        ("Los archivos HTML en docs/ no se actualizaban al regenerar el proyecto",
+         "Después de cada ejecución, los archivos en docs/ permanecían desactualizados "
+         "mientras dashboard/ sí se regeneraba. Solución: se agregó al final de "
+         "ejecutar_proyecto.py un paso de sincronización con shutil.copy2() que copia "
+         "los tres dashboards HTML de dashboard/ a docs/ tras cada regeneración exitosa."),
     ]
     for titulo_err, desc_err in errores:
         pdf._txt(9.5, "B", (180, 30, 30))
@@ -743,18 +812,6 @@ def seccion_bitacora(pdf):
         pdf.multi_cell(156, 5, desc_err, align="J",
                        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.espacio(2)
-
-    pdf.subtitulo("6.5 Fase V — Publicación en GitHub Pages")
-    for item in [
-        "Se creó el repositorio público analisis-climatico-fotovoltaico en la cuenta "
-        "fernansaurio de GitHub.",
-        "Se configuró GitHub Pages para servir desde la carpeta /docs de la rama master.",
-        "La autenticación SSH falló por incompatibilidad de llaves; se resolvió usando "
-        "HTTPS con token de acceso personal vía 'gh auth token'.",
-        "Sitio publicado: https://fernansaurio.github.io/analisis-climatico-fotovoltaico/",
-    ]:
-        pdf.item(item)
-        pdf.espacio(1)
 
 
 # ══════════════════════════════════════════════════════════════════
