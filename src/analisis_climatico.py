@@ -4041,6 +4041,11 @@ function calNav(dir){{
   if(m < 1){{m=12; y--;}}
   if(m > 12){{m=1;  y++;}}
   calMes = {{year:y, month:m}};
+  // Actualizar diaSelec al primer día con datos del nuevo mes
+  const pad2 = n => String(n).padStart(2,'0');
+  const pref = `${{y}}-${{pad2(m)}}`;
+  const fechasNewMes = fechasConSensor(sensor).filter(f => f.startsWith(pref));
+  if(fechasNewMes.length) diaSelec = fechasNewMes[0];
   renderizarCalendario();
   // Al cambiar de mes → vista de mes completo
   periodo = 'mes';
@@ -4475,6 +4480,59 @@ window.addEventListener('resize', ()=>{{
   }});
 }});
 
+// ── Cálculo de amanecer/ocaso (NOAA/Meeus) — fallback para fechas sin datos ──
+function calcSolJS(dateStr){{
+  const [anio, mes, dia] = dateStr.split('-').map(Number);
+  const lat = 13.6929, lon = -89.2182;
+  const A = Math.trunc((14-mes)/12);
+  const Y = anio+4800-A, M = mes+12*A-3;
+  const JD = dia + Math.trunc((153*M+2)/5) + 365*Y
+           + Math.trunc(Y/4) - Math.trunc(Y/100) + Math.trunc(Y/400) - 32045;
+  const n  = JD - 2451545.0 + 0.0008;
+  const Js = n - lon/360.0;
+  const Msol = ((357.5291+0.98560028*Js)%360+360)%360;
+  const C = 1.9148*Math.sin(Msol*Math.PI/180)
+          + 0.0200*Math.sin(2*Msol*Math.PI/180)
+          + 0.0003*Math.sin(3*Msol*Math.PI/180);
+  const lam = ((Msol+C+282.9372)%360+360)%360;
+  const Jtr = 2451545.0+Js
+            + 0.0053*Math.sin(Msol*Math.PI/180)
+            - 0.0069*Math.sin(2*lam*Math.PI/180);
+  const dec_sin = Math.sin(lam*Math.PI/180)*Math.sin(23.4397*Math.PI/180);
+  const dec_cos = Math.sqrt(1-dec_sin*dec_sin);
+  const lat_r = lat*Math.PI/180;
+  const den = Math.cos(lat_r)*dec_cos;
+  if(Math.abs(den)<1e-9) return {{amanecer:'N/A',ocaso:'N/A',duracion_h:0}};
+  const cos_w0 = Math.max(-1,Math.min(1,(Math.sin(-0.833*Math.PI/180)-Math.sin(lat_r)*dec_sin)/den));
+  const w0 = Math.acos(cos_w0)/(2*Math.PI);
+  function jdToHHMM(jd){{
+    let frac = (jd+0.5)%1; let fl = (frac-6/24+1)%1;
+    const h=Math.floor(fl*24), mm=Math.floor((fl*24-h)*60);
+    return String(h).padStart(2,'0')+':'+String(mm).padStart(2,'0');
+  }}
+  return {{amanecer:jdToHHMM(Jtr-w0), ocaso:jdToHHMM(Jtr+w0), duracion_h:Math.round(w0*480)/10}};
+}}
+
+// ── Fase lunar (ecuación de Conway) — fallback para fechas sin datos ──
+function calcLunaJS(dateStr){{
+  let [anio, mes, dia] = dateStr.split('-').map(Number);
+  if(mes<3){{ anio-=1; mes+=12; }}
+  const A=Math.trunc(anio/100), B=Math.trunc(A/4);
+  const JD = (2-A+B)+dia+Math.trunc(365.25*(anio+4716))+Math.trunc(30.6001*(mes+1))-1524.5;
+  let fase = (JD-2451550.1)/29.53058867;
+  fase = fase-Math.trunc(fase); if(fase<0) fase+=1;
+  let nombre, emoji;
+  if(fase<0.025||fase>=0.975){{nombre='Luna nueva';emoji='🌑';}}
+  else if(fase<0.25){{nombre='Creciente';emoji='🌒';}}
+  else if(fase<0.275){{nombre='Cuarto creciente';emoji='🌓';}}
+  else if(fase<0.50){{nombre='Gibosa creciente';emoji='🌔';}}
+  else if(fase<0.525){{nombre='Luna llena';emoji='🌕';}}
+  else if(fase<0.75){{nombre='Gibosa menguante';emoji='🌖';}}
+  else if(fase<0.775){{nombre='Cuarto menguante';emoji='🌗';}}
+  else{{nombre='Menguante';emoji='🌘';}}
+  return {{fase:Math.round(fase*10000)/10000, nombre, emoji}};
+}}
+
 // ── Widgets ──
 function actualizarWidgets(datos){{
   const grid = document.getElementById('widgets-grid');
@@ -4497,8 +4555,8 @@ function actualizarWidgets(datos){{
 
   // Datos del día seleccionado para luna y sol
   const dFecha = diaSelec || (datos.length ? datos[datos.length-1].fecha : null);
-  const luna   = dFecha ? CLIMA.fases_lunares[dFecha] : null;
-  const sol    = dFecha ? CLIMA.sol[dFecha] : null;
+  const luna   = dFecha ? (CLIMA.fases_lunares[dFecha] || calcLunaJS(dFecha)) : null;
+  const sol    = dFecha ? (CLIMA.sol[dFecha] || calcSolJS(dFecha)) : null;
 
   const icono_dir = (d)=>{{
     if(!d||d==='N/D') return '';
@@ -5351,16 +5409,32 @@ function renderTablaMensual(){{
     ${{VARS_ORD.map(()=>'<th>Media</th><th>Máx</th><th>Mín</th>').join('')}}
   </tr>`;
 
-  // Ordenar meses disponibles
+  // Ordenar meses disponibles (desde dias si faltan en smAlias)
   const meses = new Set();
   VARS_ORD.forEach(v=>{{ if(smAlias[v]) Object.keys(smAlias[v]).forEach(m=>meses.add(m)); }});
+  // Agregar meses de CLIMA.dias para cubrir viento/presion
+  Object.keys(CLIMA.dias).forEach(f=>{{ if(CLIMA.dias[f]?.[sensor]) meses.add(f.slice(0,7)); }});
   const mesOrden = [...meses].sort();
 
   const f1 = v => (v!=null&&!isNaN(v)) ? Number(v).toFixed(1) : '—';
 
+  // Fallback: calcular stats desde lecturas horarias del mes
+  function statsHorasMes(mes, clave){{
+    const diasMes = Object.keys(CLIMA.dias).filter(f=>f.startsWith(mes)&&CLIMA.dias[f]?.[sensor]);
+    let vals = [];
+    for(const f of diasMes){{
+      const hr = CLIMA.dias[f][sensor]?.horas;
+      if(hr && hr[clave]) vals = vals.concat(hr[clave].filter(v=>v!=null&&!isNaN(v)));
+    }}
+    if(!vals.length) return null;
+    let s=0, mn=vals[0], mx=vals[0];
+    for(const v of vals){{ s+=v; if(v<mn) mn=v; if(v>mx) mx=v; }}
+    return {{media:s/vals.length, minimo:mn, maximo:mx}};
+  }}
+
   tbody.innerHTML = mesOrden.map(mes=>{{
     const cells = VARS_ORD.map(v=>{{
-      const sm = smAlias[v]?.[mes];
+      const sm = smAlias[v]?.[mes] || statsHorasMes(mes, v);
       if(!sm) return '<td>—</td><td>—</td><td>—</td>';
       return `<td style="font-family:var(--mono)">${{f1(sm.media)}}</td>
               <td style="font-family:var(--mono);color:#f87171">${{f1(sm.maximo)}}</td>
@@ -5846,6 +5920,11 @@ function irAFecha(fechaStr){{
     document.querySelectorAll('.btn-period').forEach(b=>b.classList.remove('active'));
     const pm = document.getElementById('p-mes');
     if(pm) pm.classList.add('active');
+    // Actualizar diaSelec al primer día con datos del mes destino
+    const pad2 = n => String(n).padStart(2,'0');
+    const pref = `${{y}}-${{pad2(m)}}`;
+    const fechasMes = fechasConSensor(sensor).filter(f => f.startsWith(pref));
+    if(fechasMes.length) diaSelec = fechasMes[0];
   }}
   renderizarCalendario();
   actualizarTodoSinScroll();
