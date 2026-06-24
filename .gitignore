@@ -1,5 +1,8 @@
-# Datos crudos (quedan solo en local)
-datos_crudos/
+# Datos crudos (quedan solo en local — el .txt de instrucciones sí sube)
+datos_crudos/weatherlink/
+datos_crudos/sma_solar/
+datos_crudos/**/*.csv
+datos_crudos/**/*.pkl
 
 # Cache de cálculos Python
 analisis_cache.pkl

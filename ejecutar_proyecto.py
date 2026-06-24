@@ -3,16 +3,32 @@
 """
 ejecutar_proyecto.py — Punto de entrada único del proyecto
 ===========================================================
-Orquesta en orden:
-  1. Verifica que las librerías C++ cargan correctamente
-  2. Carga y cura los datos WeatherLink (EEP + UES)
-  3. Carga y cura los datos SMA Solar
-  4. Corre el motor estadístico C++ sobre todas las variables
-  5. Exporta JSON mensuales a dashboard/exportaciones/
-  6. Genera dashboard_fusion.html  (Rad Solar vs Potencia, date pickers)
-  7. Genera dashboard_solar.html   (planta fotovoltaica)
-  8. Genera dashboard_msn_interactivo.html (sensores climáticos)
-  9. Abre todas las páginas web en el navegador
+Uso:
+  python3 ejecutar_proyecto.py
+
+Antes de correr, coloca tus archivos CSV en datos_crudos/:
+  • WeatherLink (7GT-EEP / 7GT-UES): exportados de weatherlink.com
+  • SMA Solar: archivos CSV diarios del portal del inversor SMA
+
+El script hace TODO automáticamente:
+  0. Valida dependencias Python (pandas, numpy)
+  1. Detecta y ordena los CSV en datos_crudos/   ← automático
+  2. Verifica las librerías C++ compiladas
+  3. Carga y cura los datos WeatherLink (EEP + UES)
+  4. Carga y cura los datos SMA Solar
+  5. Corre el motor estadístico C++ sobre todas las variables
+  6. Exporta JSON mensuales a dashboard/exportaciones/
+  7. Genera dashboard_fusion.html   (Rad Solar vs Potencia)
+  8. Genera dashboard_solar.html    (planta fotovoltaica)
+  9. Genera dashboard_msn_interactivo.html (sensores climáticos)
+ 10. Abre todas las páginas en el navegador
+ 11. Sincroniza docs/ para GitHub Pages
+
+Dónde quedan los datos:
+  dashboard/  → archivos HTML listos para abrir en el navegador
+  docs/       → copia sincronizada para GitHub Pages (./publicar.sh)
+  datos_crudos/weatherlink/ → CSVs WeatherLink ordenados
+  datos_crudos/sma_solar/   → CSVs SMA ordenados y renombrados
 """
 
 import os
@@ -64,6 +80,147 @@ def abrir_html(ruta):
         ok(f"Abierto: {os.path.basename(ruta)}")
     else:
         warn(f"No encontrado: {os.path.basename(ruta)}")
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PASO 0A — VALIDAR DEPENDENCIAS PYTHON
+# ══════════════════════════════════════════════════════════════════════
+
+def verificar_dependencias():
+    """Comprueba que pandas y numpy están instalados antes de importarlos."""
+    paso("0a", "Validando dependencias Python")
+    REQUERIDAS = [
+        ("pandas",  "Manipulación de datos CSV"),
+        ("numpy",   "Cálculos numéricos y arrays ctypes"),
+    ]
+    faltantes = []
+    for modulo, descripcion in REQUERIDAS:
+        try:
+            __import__(modulo)
+            version = __import__(modulo).__version__
+            ok(f"{modulo} {version}  — {descripcion}")
+        except ImportError:
+            err(f"{modulo}  NO instalado  — {descripcion}")
+            faltantes.append(modulo)
+
+    if faltantes:
+        print()
+        print("  ┌─────────────────────────────────────────────────────┐")
+        print("  │  Faltan dependencias. Instálalas con:               │")
+        print(f"  │    pip install {' '.join(faltantes):<37}│")
+        print("  │                                                     │")
+        print("  │  Si no tienes pip:  sudo apt install python3-pip   │")
+        print("  └─────────────────────────────────────────────────────┘")
+        sys.exit(1)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PASO 0B — AUTO-DETECCIÓN Y ORDENADO DE DATOS CSV
+# ══════════════════════════════════════════════════════════════════════
+
+def auto_ordenar_datos():
+    """
+    Escanea datos_crudos/ recursivamente y mueve cada CSV al subdirectorio
+    correcto (weatherlink/ o sma_solar/) según su contenido.
+    Llama la lógica de ordenar_datos.py directamente.
+    """
+    paso("0b", "Auto-detección y ordenado de archivos CSV")
+
+    WL_DEST  = os.path.join(ROOT, "datos_crudos", "weatherlink")
+    SMA_DEST = os.path.join(ROOT, "datos_crudos", "sma_solar")
+    ENTRADA  = os.path.join(ROOT, "datos_crudos")
+
+    os.makedirs(WL_DEST,  exist_ok=True)
+    os.makedirs(SMA_DEST, exist_ok=True)
+
+    import re, shutil as _sh
+
+    _PAT_ISO   = re.compile(r"^(\d{4})-(\d{2})-(\d{2})(?:\(\d+\))?\.csv$", re.I)
+    _PAT_LEGAC = re.compile(r"^(\d{2})-(\d{2})-(\d{4})(?:\(\d+\))?\.csv$", re.I)
+
+    def _identificar(ruta):
+        for enc in ("utf-8", "latin-1"):
+            try:
+                with open(ruta, encoding=enc, errors="replace") as f:
+                    l0 = f.readline().strip().strip('"')
+                    f.readline()
+                if "7GT-EEP" in l0.upper(): return "WL-EEP"
+                if "7GT-UES" in l0.upper(): return "WL-UES"
+                if l0.upper().startswith("CSV-EXPORT"): return "SMA"
+                break
+            except Exception:
+                continue
+        return "DESCONOCIDO"
+
+    def _dest_sma(src, dest_dir):
+        base = os.path.basename(src)
+        m = _PAT_ISO.match(base)
+        if m:
+            nombre = f"{m.group(1)}-{m.group(2)}-{m.group(3)}.csv"
+        else:
+            m = _PAT_LEGAC.match(base)
+            nombre = f"{m.group(3)}-{m.group(1)}-{m.group(2)}.csv" if m else base
+        dest = os.path.join(dest_dir, nombre)
+        if os.path.exists(dest) and os.path.abspath(dest) != os.path.abspath(src):
+            stem, n = nombre[:-4], 1
+            while os.path.exists(dest):
+                dest = os.path.join(dest_dir, f"{stem}({n}).csv"); n += 1
+        return dest
+
+    n_wl = n_sma = n_lugar = n_unk = 0
+    todos = []
+    for dp, _, fnames in os.walk(ENTRADA):
+        for fn in sorted(fnames):
+            if fn.lower().endswith(".csv") and not fn.endswith("_clean.csv"):
+                todos.append(os.path.join(dp, fn))
+
+    if not todos:
+        warn("No se encontraron CSVs en datos_crudos/ — coloca tus archivos allí")
+        return
+
+    for ruta in todos:
+        tipo = _identificar(ruta)
+        fname = os.path.basename(ruta)
+        if tipo in ("WL-EEP", "WL-UES"):
+            dest = os.path.join(WL_DEST, fname)
+            if os.path.abspath(ruta) == os.path.abspath(dest):
+                n_lugar += 1
+            else:
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                _sh.move(ruta, dest)
+                n_wl += 1
+        elif tipo == "SMA":
+            dest = _dest_sma(ruta, SMA_DEST)
+            if os.path.abspath(ruta) == os.path.abspath(dest):
+                n_lugar += 1
+            else:
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                _sh.move(ruta, dest)
+                n_sma += 1
+        else:
+            n_unk += 1
+
+    ok(f"WeatherLink movidos: {n_wl}  |  SMA movidos: {n_sma}  "
+       f"|  Ya en lugar: {n_lugar}  |  Desconocidos: {n_unk}")
+
+    # Verificar que hay datos mínimos para continuar
+    wl_files = [f for f in os.listdir(WL_DEST)
+                if f.endswith(".csv") and not f.endswith("_clean.csv")]
+    sma_files = [f for f in os.listdir(SMA_DEST) if f.endswith(".csv")]
+    if not wl_files:
+        print()
+        print("  ┌─────────────────────────────────────────────────────┐")
+        print("  │  No se encontraron datos WeatherLink.               │")
+        print("  │                                                     │")
+        print("  │  Coloca en datos_crudos/ los archivos CSV de las   │")
+        print("  │  estaciones 7GT-EEP y 7GT-UES (weatherlink.com).  │")
+        print("  └─────────────────────────────────────────────────────┘")
+        sys.exit(1)
+    if not sma_files:
+        warn("No se encontraron datos SMA — el dashboard solar quedará vacío")
+
+    print(f"  Archivos WeatherLink listos: {len(wl_files)}")
+    print(f"  Archivos SMA listos:         {len(sma_files)}")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -167,11 +324,12 @@ def cargar_datos():
 
     # ── SMA Solar ─────────────────────────────────────────────────────
     paso(3, "Cargando y curando datos SMA Solar")
-    carpetas = [
-        SMA_DIR / "2023-2024" / "2023",
-        SMA_DIR / "2023-2024" / "2024",
-        SMA_DIR / "SMA-EIE-2025-2026",
-    ]
+    # Descubrimiento dinámico: cualquier subdirectorio (o la raíz) que tenga CSVs
+    carpetas = []
+    for dirpath, _, fnames in os.walk(str(SMA_DIR)):
+        if any(f.lower().endswith(".csv") for f in fnames):
+            carpetas.append(Path(dirpath))
+    carpetas = sorted(carpetas)
     df_sma = cargar_sma(carpetas)
     freq_sma = df_sma.attrs.get("freq_min", 15)
     if df_sma.empty:
@@ -568,7 +726,29 @@ def main():
     titulo("PROYECTO PROGRAMACIÓN NUMÉRICA — ANÁLISIS CLIMÁTICO/FOTOVOLTAICO")
     print(f"  Directorio: {ROOT}")
     print(f"  Python:     {sys.version.split()[0]}")
+    print()
+    print("  ╔═══════════════════════════════════════════════════════╗")
+    print("  ║  CÓMO USAR ESTE PROYECTO                             ║")
+    print("  ╠═══════════════════════════════════════════════════════╣")
+    print("  ║  1. Coloca tus CSV en:  datos_crudos/                ║")
+    print("  ║     • WeatherLink (7GT-EEP, 7GT-UES) de weatherlink.com ║")
+    print("  ║     • SMA Solar: archivos diarios del portal SMA     ║")
+    print("  ║  2. Corre:  python3 ejecutar_proyecto.py             ║")
+    print("  ║     (los datos se detectan y ordenan automáticamente) ║")
+    print("  ╠═══════════════════════════════════════════════════════╣")
+    print("  ║  DÓNDE QUEDAN LOS RESULTADOS                         ║")
+    print("  ║  dashboard/  → HTMLs listos para abrir               ║")
+    print("  ║  docs/       → copia para GitHub Pages               ║")
+    print("  ║  datos_crudos/weatherlink/ → CSVs WeatherLink        ║")
+    print("  ║  datos_crudos/sma_solar/   → CSVs SMA normalizados   ║")
+    print("  ╚═══════════════════════════════════════════════════════╝")
     t0 = time.time()
+
+    # 0a. Validar dependencias Python
+    verificar_dependencias()
+
+    # 0b. Auto-detectar y ordenar datos CSV
+    auto_ordenar_datos()
 
     # 1. Verificar C++
     libs = verificar_cpp()

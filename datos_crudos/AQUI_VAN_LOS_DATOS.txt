@@ -1,0 +1,37 @@
+╔══════════════════════════════════════════════════════════════╗
+║         CARPETA DE DATOS CRUDOS — LEER ANTES DE CONTINUAR   ║
+╚══════════════════════════════════════════════════════════════╝
+
+Coloca TODOS tus archivos CSV aquí dentro (en esta carpeta o en
+cualquier subcarpeta — el sistema los detecta automáticamente).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TIPO 1 — DATOS WEATHERLINK (estaciones climáticas)
+  Fuente:  https://www.weatherlink.com → My Devices → Export Data
+  Formato: archivos CSV con nombre tipo:
+             7GT-EEP_1-1-25_12-00_AM_1_Year_XXXXXXXXX_v2.csv
+             7GT-UES_1-1-25_12-00_AM_1_Year_XXXXXXXXX_v2.csv
+  Estaciones:
+    • 7GT-EEP → San Luis Talpa, La Paz
+    • 7GT-UES → Universidad de El Salvador, San Salvador
+
+TIPO 2 — DATOS SMA SOLAR (inversor fotovoltaico)
+  Fuente:  Portal web del inversor SMA → Exportar → CSV por día
+  Formato: archivos CSV por día, nombre tipo:
+             2025-01-15.csv
+             05-12-2025.csv   (formato antiguo, también funciona)
+  El script normaliza automáticamente los nombres a YYYY-MM-DD.csv
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PASOS:
+  1. Pega aquí todos tus CSV (mezclados está bien)
+  2. Corre:  python3 ejecutar_proyecto.py
+             (detecta el tipo, los ordena y genera los dashboards)
+
+NO necesitas crear subcarpetas — el script lo hace solo.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Esta carpeta (datos_crudos/) NO se sube a GitHub por privacidad.
+Los dashboards con datos embebidos sí se suben (docs/).
