@@ -3171,7 +3171,8 @@ def _construir_json_clima(df_eep, df_ues) -> dict:
 
     # Stats mensuales por sensor
     stats_men_eep, stats_men_ues = {}, {}
-    for col in ["Temp - °C", "Hum - %", "Solar Rad - W/m^2", "Rain - mm"]:
+    for col in ["Temp - °C", "Hum - %", "Solar Rad - W/m^2", "Rain - mm",
+                "Avg Wind Speed - km/h", "Barometer - mb"]:
         if col in df_eep.columns:
             stats_men_eep[col] = calcular_estadisticos_mensuales(df_eep, col)
         if col in df_ues.columns:
