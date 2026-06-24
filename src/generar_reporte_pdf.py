@@ -495,6 +495,59 @@ def seccion_metodos(pdf):
         "sin penalizar el ciclo de prueba."
     )
 
+    pdf.subtitulo("3.9 Detección de Eventos Climáticos Extremos")
+    pdf.parrafo(
+        "Se implementó un módulo de detección de eventos extremos que evalúa seis "
+        "umbrales fijos sobre los registros diarios de cada estación. El conteo se realiza "
+        "con bucles explícitos sin pandas, comparando cada valor contra el umbral "
+        "correspondiente:"
+    )
+    for e in [
+        "Calor extremo:  temperatura máxima ≥ 33 °C",
+        "Frío inusual:   temperatura mínima ≤ 18 °C",
+        "Lluvia intensa: precipitación diaria ≥ 5 mm",
+        "Radiación alta: radiación solar máxima ≥ 800 W/m²",
+        "Viento fuerte:  velocidad promedio diaria ≥ 25 km/h",
+        "Presión baja:   presión barométrica ≤ 1 008 mb",
+    ]:
+        pdf.item(e)
+    pdf.parrafo(
+        "Para cada categoría se calculan: número de ocurrencias, porcentaje de días "
+        "afectados e intensidad promedio del evento. Los resultados se actualizan "
+        "dinámicamente en el panel de eventos extremos del dashboard climático según "
+        "el período y la estación seleccionados."
+    )
+
+    pdf.subtitulo("3.10 Tendencia Lineal — Función _calcular_tendencia_cpp()")
+    pdf.parrafo(
+        "Para cada variable se calcula la tendencia lineal sobre la serie temporal "
+        "completa, a diferencia de la regresión mensual (sección 3.5). La función "
+        "_calcular_tendencia_cpp() invoca AjusteCurvas.regresion_lineal() sobre los "
+        "127,583 registros fusionados, usando x = índice de muestra (enteros) e y = "
+        "valor de la variable. El resultado (pendiente, intercepto) se dibuja como "
+        "línea de tendencia sobre la gráfica principal del dashboard climático."
+    )
+    pdf.formula("Tendencia(i) = a₀ + a₁ · i     donde i = 0, 1, …, N−1")
+
+    pdf.subtitulo("3.11 Tabla Resumen Mensual Completa")
+    pdf.parrafo(
+        "Se genera para cada mes una fila con los estadísticos clave: temperatura media, "
+        "máxima absoluta, mínima absoluta, humedad media, lluvia total acumulada, "
+        "radiación solar media y producción energética en kWh (cuando hay datos SMA). "
+        "Todos los valores se calculan con las funciones nativas _media(), _maximo(), "
+        "_minimo() y _suma() implementadas en Python sobre los registros del mes, "
+        "sin usar pandas ni numpy."
+    )
+
+    pdf.subtitulo("3.12 Corrección de Correlación de Pearson — 26 Pares de Variables")
+    pdf.parrafo(
+        "En la versión inicial, las claves del diccionario CLIMA.stats_alias causaban "
+        "un mapeo incorrecto que hacía fallar el cálculo de algunas correlaciones "
+        "cruzadas. Se corrigió el indexado para procesar correctamente las 26 "
+        "combinaciones de pares de variables entre ambas estaciones (EEP y UES), "
+        "usando AlgebraLineal.pearson() sobre arreglos de double pasados vía ctypes."
+    )
+
 
 # ══════════════════════════════════════════════════════════════════
 # SECCIÓN 4 — RESULTADOS CLIMÁTICOS
@@ -567,6 +620,50 @@ def seccion_resultados_clima(pdf, stats):
         "y durante la estación lluviosa (80–95 % en meses de junio a septiembre).",
     ]:
         pdf.item(patron)
+        pdf.espacio(1)
+
+    pdf.subtitulo("4.4 Modelo Predictivo de Temperatura y Radiación Solar")
+    pdf.parrafo(
+        "Se ajustó un polinomio de grado 3 sobre la serie temporal diaria, usando "
+        "AjusteCurvas.regresion_polinomial(grado=3) con x = día del año (1–366). "
+        "El modelo se calibró con los datos del período completo y se proyecta "
+        "30 días hacia adelante con resaltado visual en el dashboard. "
+        "Los errores cuadráticos medios obtenidos fueron:"
+    )
+    pdf.caja_info("Resultados del Modelo Predictivo (Regresión Polinomial Grado 3)", [
+        "Variable: Temperatura media diaria (°C)",
+        "  RMSE = 0.9985 °C   — error menor a 1 °C en el período de calibración",
+        "Variable: Radiación solar media diaria (W/m²)",
+        "  RMSE = 42.22 W/m²  — desviación típica de días nublados vs despejados",
+        "Método: AjusteCurvas.regresion_polinomial() + eliminación gaussiana (C++)",
+    ], color=(230, 255, 230))
+    pdf.parrafo(
+        "El RMSE de temperatura de 0.9985 °C indica que el modelo captura "
+        "adecuadamente la variación estacional. El error de 42.22 W/m² en "
+        "radiación solar refleja la variabilidad inherente a la nubosidad, que "
+        "un modelo puramente estacional no puede predecir."
+    )
+
+    pdf.subtitulo("4.5 Análisis de Eventos Climáticos Extremos")
+    pdf.parrafo(
+        "Aplicando los seis umbrales definidos en la sección 3.9, se identificaron "
+        "los eventos extremos del período para cada estación. Los patrones más "
+        "relevantes observados son:"
+    )
+    for obs in [
+        "Calor extremo (≥ 33 °C): más frecuente en EEP (zona costera) que en UES "
+        "(zona urbana), concentrado en los meses de marzo–mayo antes del inicio "
+        "de la estación lluviosa.",
+        "Lluvia intensa (≥ 5 mm/día): principalmente en la franja mayo–octubre, con "
+        "picos en septiembre. La estación EEP registra eventos de mayor intensidad "
+        "por la influencia del frente de convergencia tropical.",
+        "Radiación alta (≥ 800 W/m²): predomina de noviembre a abril en ambas "
+        "estaciones, coincidiendo con la mayor producción fotovoltaica del sistema SMA.",
+        "Presión baja (≤ 1 008 mb): correlaciona con días lluviosos y frentes "
+        "perturbados; su detección en tiempo real se usa como indicador preventivo "
+        "de condiciones climáticas adversas.",
+    ]:
+        pdf.item(obs)
         pdf.espacio(1)
 
 
@@ -813,6 +910,83 @@ def seccion_bitacora(pdf):
                        new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.espacio(2)
 
+    pdf.add_page()
+    pdf.subtitulo("6.7 Fase VII — Modelo Predictivo, Pearson y Calendario Navbar  [20 jun 2026]")
+    for item in [
+        "Se integró el modelo predictivo basado en regresión polinomial de grado 3 "
+        "(AjusteCurvas.regresion_polinomial) para temperatura media diaria y radiación "
+        "solar. El modelo se ajusta sobre el total del período disponible y proyecta los "
+        "30 días siguientes en la gráfica principal del dashboard, con zona sombreada para "
+        "distinguir la proyección de los datos históricos. RMSE obtenido: 0.9985 °C "
+        "(temperatura) y 42.22 W/m² (radiación solar).",
+
+        "Se corrigió el cálculo de la correlación de Pearson entre pares de variables. "
+        "El error original provenía de un mapeo incorrecto de claves en el diccionario "
+        "CLIMA.stats_alias, que asignaba nombres de alias duplicados a algunas variables. "
+        "Tras la corrección, se calculan correctamente las 26 combinaciones de pares de "
+        "variables entre ambas estaciones, usando AlgebraLineal.pearson() sobre arreglos "
+        "de double pasados vía ctypes.",
+
+        "Se corrigió el cálculo de estadísticos globales en C++: la versión inicial tomaba "
+        "solo los primeros registros del DataFrame en lugar de la muestra completa. Tras el "
+        "fix, los estadísticos se calculan sobre los 127,583 registros fusionados, resultando "
+        "en medias, desviaciones estándar y percentiles representativos del período completo.",
+
+        "Se añadió un input de tipo date en la barra de navegación superior (nav-cal-input) "
+        "del dashboard climático, vinculado a la función irAFecha(). Al ingresar una fecha, "
+        "el dashboard navega automáticamente al mes correspondiente en el calendario "
+        "(actualizando calMes) y selecciona el día indicado, integrando la vista de detalle "
+        "diario sin necesidad de navegación manual por el calendario.",
+
+        "Se implementó preservación del scroll vertical (scrollY) al actualizar el dashboard: "
+        "antes de regenerar el contenido, se guarda window.scrollY; tras la actualización, "
+        "se restaura con window.scrollTo(), eliminando el comportamiento de salto al inicio "
+        "de la página que ocurría al cambiar de período o estación.",
+    ]:
+        pdf.item(item)
+        pdf.espacio(1)
+
+    pdf.subtitulo("6.8 Fase VIII — Visualizaciones Avanzadas y Análisis de Extremos  [20 jun 2026]")
+    for item in [
+        "Se detectó y corrigió un error en las rutas de las bibliotecas JavaScript embebidas "
+        "en el dashboard de fusión: la ruta a chart.umd.min.js apuntaba a una ruta local "
+        "relativa incorrecta, haciendo que las gráficas Chart.js no se renderizaran al abrir "
+        "el archivo en el navegador. Se corrigió referenciando la versión CDN con fallback "
+        "local para compatibilidad con GitHub Pages.",
+
+        "Se añadió al dashboard climático un mapa de calor horario implementado en Canvas 2D "
+        "puro (sin matplotlib): una cuadrícula de 24 columnas (horas 0–23) por 12 filas "
+        "(meses 1–12) donde cada celda muestra la media de temperatura o radiación solar "
+        "con gradiente de color (azul→rojo para temperatura, negro→amarillo para solar). "
+        "Este componente reemplaza las imágenes base64 de matplotlib del diseño anterior, "
+        "reduciendo el tamaño del HTML generado.",
+
+        "Se implementó el análisis de tendencia lineal con C++ mediante la función "
+        "_calcular_tendencia_cpp() que llama a AjusteCurvas.regresion_lineal() sobre la "
+        "serie temporal completa. La línea de tendencia resultante (pendiente e intercepto) "
+        "se superpone sobre la gráfica principal del dashboard, permitiendo identificar "
+        "visualmente si la variable muestra aumento, disminución o estabilidad en el período.",
+
+        "Se implementó una tabla de resumen mensual completo en el dashboard, generada "
+        "dinámicamente desde el objeto CLIMA en JavaScript. Cada fila corresponde a un mes "
+        "e incluye: temperatura media, máxima y mínima absolutas, humedad media, lluvia "
+        "acumulada, radiación solar media y —cuando están disponibles— kWh producidos por "
+        "el sistema SMA. La tabla se filtra automáticamente al cambiar de estación.",
+
+        "Se implementó el panel de análisis de eventos climáticos extremos, calculado con "
+        "seis umbrales fijos (calor ≥33 °C, frío ≤18 °C, lluvia ≥5 mm, solar ≥800 W/m², "
+        "viento ≥25 km/h, presión ≤1 008 mb). Para cada categoría se muestra: número de "
+        "días afectados, porcentaje sobre el total del período e intensidad promedio del "
+        "evento. El panel se recalcula dinámicamente al cambiar de estación o período.",
+
+        "Tras todas las adiciones, el dashboard climático principal (dashboard_msn_interactivo.html) "
+        "alcanzó 17.6 MB incluyendo datos embebidos, gráficas Canvas 2D, el modelo predictivo "
+        "y todos los paneles de análisis avanzado. El pipeline completo regenera los tres "
+        "dashboards y los sincroniza automáticamente a docs/ para su publicación en GitHub Pages.",
+    ]:
+        pdf.item(item)
+        pdf.espacio(1)
+
 
 # ══════════════════════════════════════════════════════════════════
 # SECCIÓN 7 — ARQUITECTURA
@@ -852,7 +1026,8 @@ def seccion_arquitectura(pdf):
         "Exportación JSON por rangos de fecha para el dashboard de fusión.",
         "Generación dashboard_fusion.html con datos sincronizados y gráficas Canvas 2D.",
         "Generación dashboard_solar.html con calendario, gráficas uPlot y estadísticos.",
-        "Generación dashboard_msn_interactivo.html: calendario, rosa de vientos, modelo.",
+        "Generación dashboard_msn_interactivo.html: calendario, rosa de vientos, modelo predictivo, "
+        "mapa de calor Canvas 2D, tendencia lineal C++, tabla mensual y eventos extremos.",
         "Sincronización docs/ ← dashboard/ para actualizar GitHub Pages automáticamente.",
         "Apertura de los tres dashboards en el navegador para verificación.",
     ]
@@ -907,6 +1082,16 @@ def seccion_conclusiones(pdf):
         "El sistema solar fotovoltaico de la EIE muestra alta dependencia de la irradiancia: "
         "la correlación entre irradiancia y potencia AC supera r = 0.85 en horas de sol, y "
         "los meses de estación seca presentan la mayor producción energética.",
+
+        "El modelo predictivo de temperatura basado en regresión polinomial de grado 3 "
+        "(AjusteCurvas C++) logró un RMSE de 0.9985 °C sobre el período de calibración, "
+        "confirmando que los patrones estacionales de temperatura son suficientemente "
+        "regulares para ser modelados con un polinomio de bajo grado.",
+
+        "El análisis de eventos extremos con seis umbrales fijos aportó valor diagnóstico "
+        "al proyecto: permite cuantificar días de calor intenso, lluvia significativa y "
+        "alta irradiancia, facilitando la interpretación de los resultados estadísticos "
+        "en términos de impacto real sobre las operaciones del sistema fotovoltaico.",
 
         "Los dashboards HTML interactivos generados íntegramente desde Python ofrecen una "
         "interfaz funcional y visualmente apropiada para la presentación académica de "

@@ -36,6 +36,17 @@ import sys
 import time
 import shutil
 import webbrowser
+import subprocess
+
+# ─── Detección de WSL ─────────────────────────────────────────────────
+def _detectar_wsl():
+    try:
+        with open("/proc/version") as f:
+            return "microsoft" in f.read().lower()
+    except Exception:
+        return False
+
+_EN_WSL = _detectar_wsl()
 
 # ─── Rutas base ───────────────────────────────────────────────────────
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -173,12 +184,33 @@ def err(texto):
     print(f"  ❌ {texto}")
 
 def abrir_html(ruta):
-    """Abre un archivo HTML en el navegador si existe."""
-    if os.path.exists(ruta):
-        webbrowser.open(f"file://{os.path.abspath(ruta)}")
-        ok(f"Abierto: {os.path.basename(ruta)}")
-    else:
+    """Abre un archivo HTML en el navegador si existe. Compatible con WSL."""
+    if not os.path.exists(ruta):
         warn(f"No encontrado: {os.path.basename(ruta)}")
+        return
+    abspath = os.path.abspath(ruta)
+    nombre  = os.path.basename(ruta)
+    if _EN_WSL:
+        # En WSL, webbrowser.open("file:///home/...") llama al navegador de
+        # Windows con una ruta Linux que Windows no puede resolver.
+        # wslpath -w convierte a "\\wsl.localhost\Ubuntu\home\..." y
+        # cmd.exe /c start lo abre correctamente en el browser de Windows.
+        try:
+            win_path = subprocess.check_output(
+                ["wslpath", "-w", abspath],
+                stderr=subprocess.DEVNULL
+            ).decode().strip()
+            subprocess.Popen(
+                ["cmd.exe", "/c", "start", "", win_path],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            ok(f"Abierto (WSL→Windows): {nombre}")
+        except Exception:
+            warn(f"WSL: no se pudo abrir automáticamente.")
+            print(f"       Abre manualmente: {abspath}")
+    else:
+        webbrowser.open(f"file://{abspath}")
+        ok(f"Abierto: {nombre}")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -802,22 +834,63 @@ def exportar_y_generar(df_wl, df_sma, freq_wl, freq_sma):
 # PASO FINAL — ABRIR EN NAVEGADOR
 # ══════════════════════════════════════════════════════════════════════
 
+def _iniciar_servidor_local(carpeta, puerto=8765):
+    """Levanta un servidor HTTP en carpeta:puerto en un hilo daemon."""
+    import http.server, threading, socketserver
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=carpeta, **kwargs)
+        def log_message(self, *args):
+            pass  # silenciar logs
+    try:
+        srv = socketserver.TCPServer(("", puerto), Handler)
+        t = threading.Thread(target=srv.serve_forever, daemon=True)
+        t.start()
+        return puerto
+    except OSError:
+        return None  # puerto ocupado, no crítico
+
+
 def abrir_dashboards(fusion, solar, msn):
     paso("→", "Abriendo dashboards en el navegador")
     time.sleep(0.5)
-    # Abrir primero la página de inicio (index.html) para navegación
-    idx_local = os.path.join(DASH, "index.html")
-    if os.path.exists(idx_local):
-        webbrowser.open(f"file://{os.path.abspath(idx_local)}")
-        ok("index.html  ← página de inicio con navegación")
-        time.sleep(1.2)
+
+    if _EN_WSL:
+        # En WSL, levantamos un servidor HTTP local y abrimos via localhost.
+        # Esto evita tanto el problema de rutas como las restricciones CORS de
+        # file:// en navegadores Windows (Chrome/Edge bloquean JS de rutas UNC).
+        print("  ℹ️  Detectado WSL: iniciando servidor HTTP local en puerto 8765")
+        puerto = _iniciar_servidor_local(DASH, 8765)
+        if puerto:
+            url_base = f"http://localhost:{puerto}"
+            time.sleep(0.3)
+            # Abrir en el navegador de Windows via cmd.exe
+            try:
+                url = f"{url_base}/index.html"
+                subprocess.Popen(
+                    ["cmd.exe", "/c", "start", "", url],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+                ok(f"Servidor en {url_base}  →  abierto en el navegador de Windows")
+                print(f"       Si no abre solo, ve a: {url}")
+                print(f"       El servidor se detiene al cerrar esta terminal.")
+            except Exception:
+                warn("No se pudo abrir automáticamente.")
+                print(f"       Abre manualmente en Windows: http://localhost:{puerto}/index.html")
+        else:
+            warn("Puerto 8765 ocupado. Intentando apertura directa...")
+            abrir_html(os.path.join(DASH, "index.html"))
     else:
-        # Fallback: abrir cada dashboard individualmente
-        for ruta in [fusion, solar, msn]:
-            if ruta and os.path.exists(ruta):
-                webbrowser.open(f"file://{os.path.abspath(ruta)}")
-                ok(f"{os.path.basename(ruta)}")
-                time.sleep(1.2)
+        # Linux normal: abrir con file://
+        idx_local = os.path.join(DASH, "index.html")
+        if os.path.exists(idx_local):
+            abrir_html(idx_local)
+            time.sleep(1.2)
+        else:
+            for ruta in [fusion, solar, msn]:
+                if ruta and os.path.exists(ruta):
+                    abrir_html(ruta)
+                    time.sleep(1.2)
 
 
 # ══════════════════════════════════════════════════════════════════════
