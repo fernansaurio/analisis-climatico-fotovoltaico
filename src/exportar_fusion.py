@@ -558,11 +558,23 @@ footer{{text-align:center;padding:20px;color:var(--muted);font-size:.75rem;
 
 </div>
 <footer>
-  Proyecto Programación Numérica · UES El Salvador · Motor C++: AjusteCurvas, MetodosRaices
-  &nbsp;·&nbsp;
-  <a href="index.html" style="color:var(--blue);text-decoration:none">🏠 Inicio</a> &nbsp;·&nbsp;
-  <a href="dashboard_msn_interactivo.html" style="color:#4ade80;text-decoration:none">🌤 Clima</a> &nbsp;·&nbsp;
-  <a href="dashboard_solar.html" style="color:var(--amber);text-decoration:none">☀️ Solar</a>
+  <div>Proyecto Programación Numérica · UES El Salvador · Motor C++: AjusteCurvas, MetodosRaices</div>
+  <div style="margin:6px 0">
+    <a href="index.html" style="color:var(--blue);text-decoration:none">🏠 Inicio</a> &nbsp;·&nbsp;
+    <a href="dashboard_msn_interactivo.html" style="color:#4ade80;text-decoration:none">🌤 Clima</a> &nbsp;·&nbsp;
+    <a href="dashboard_solar.html" style="color:var(--amber);text-decoration:none">☀️ Solar</a>
+  </div>
+  <div style="margin-top:10px;font-size:.68rem;line-height:1.9;color:#6b7280">
+    ANÁLISIS CLIMÁTICO Y FOTOVOLTAICO — CICLO I-2026 · AEL115 · UES-FIA<br>
+    MAURICIO A. MUÑOZ CONTRERAS <code>MC24021</code> &nbsp;·&nbsp;
+    MARCELO X. MOLINA GOMEZ <code>MG24048</code> &nbsp;·&nbsp;
+    DIEGO J. MENDOZA PRUDENCIO <code>MP24048</code> &nbsp;·&nbsp;
+    FERNANDO J. PADILLA CRUZ <code>PC24039</code> &nbsp;·&nbsp;
+    OSCAR M. VELASQUEZ VILLANUEVA <code>VV24002</code>
+  </div>
+  <div style="margin-top:6px;font-size:.62rem;color:#4b5563">
+    © 2026 · Universidad de El Salvador, Facultad de Ingeniería y Arquitectura
+  </div>
 </footer>
 
 <script>
@@ -756,9 +768,9 @@ function clearChart(id) {{
 
 function _pxDims(canvas) {{
   const dpr = window.devicePixelRatio||1;
-  const rect = canvas.getBoundingClientRect();
-  const W = rect.width||canvas.offsetWidth||800;
-  const H = canvas.height;
+  const W = canvas.offsetWidth || canvas.parentElement?.offsetWidth || 800;
+  // Leer altura original del atributo HTML para que no crezca con cada render
+  const H = parseInt(canvas.getAttribute('data-h') || canvas.getAttribute('height')) || 200;
   canvas.width  = W*dpr;
   canvas.height = H*dpr;
   const ctx = canvas.getContext('2d');

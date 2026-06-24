@@ -1910,6 +1910,17 @@ body::before{{
     Análisis generado con Python · C++ (Newton-Raphson · QuickSort · Pearson)<br>
     Datos 2023–2026 · {len(energia_men)} meses registrados
   </div>
+  <div style="margin-top:10px;font-size:.66rem;line-height:1.9;color:#6b7280">
+    ANÁLISIS CLIMÁTICO Y FOTOVOLTAICO — CICLO I-2026 · AEL115 · UES-FIA<br>
+    MAURICIO A. MUÑOZ CONTRERAS <code>MC24021</code> &nbsp;·&nbsp;
+    MARCELO X. MOLINA GOMEZ <code>MG24048</code> &nbsp;·&nbsp;
+    DIEGO J. MENDOZA PRUDENCIO <code>MP24048</code> &nbsp;·&nbsp;
+    FERNANDO J. PADILLA CRUZ <code>PC24039</code> &nbsp;·&nbsp;
+    OSCAR M. VELASQUEZ VILLANUEVA <code>VV24002</code>
+  </div>
+  <div style="margin-top:4px;font-size:.62rem;color:#4b5563">
+    © 2026 · Universidad de El Salvador, Facultad de Ingeniería y Arquitectura
+  </div>
 </footer>
 
 <script>

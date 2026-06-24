@@ -2715,6 +2715,56 @@ def _analisis_texto(variable: str, valor: float, sensor: str) -> str:
     return ""
 
 
+# ── V.A0: Datos para rosa de vientos interactiva ─────────────────────
+
+_RUMBOS_ORD = ["N","NNE","NE","ENE","E","ESE","SE","SSE",
+                "S","SSW","SW","WSW","W","WNW","NW","NNW"]
+
+def _calcular_rosa_datos(df: "pd.DataFrame") -> dict:
+    """
+    Calcula frecuencia y velocidad media por rumbo (16 sectores de 22.5°)
+    para la rosa de vientos interactiva en JS Canvas 2D.
+    Sin .mean()/.max() de pandas — implementación manual.
+    """
+    col_dir = "Prevailing Wind Dir"
+    col_vel = "Avg Wind Speed - km/h"
+    if col_dir not in df.columns:
+        return {}
+
+    freq   = {r: 0   for r in _RUMBOS_ORD}
+    v_sum  = {r: 0.0 for r in _RUMBOS_ORD}
+    v_cnt  = {r: 0   for r in _RUMBOS_ORD}
+    v_max  = {r: 0.0 for r in _RUMBOS_ORD}
+
+    dirs = df[col_dir].tolist()
+    vels = df[col_vel].tolist() if col_vel in df.columns else [0.0]*len(df)
+
+    for dv, vv in zip(dirs, vels):
+        if not isinstance(dv, str):
+            continue
+        r = dv.strip().upper().replace('"', '')
+        if r not in freq:
+            continue
+        freq[r] += 1
+        if vv == vv and vv is not None:
+            fv = float(vv)
+            v_sum[r] += fv
+            v_cnt[r] += 1
+            if fv > v_max[r]:
+                v_max[r] = fv
+
+    total = sum(freq.values()) or 1
+    return {
+        r: {
+            "pct":     round(freq[r] / total * 100, 2),
+            "vel_med": round(v_sum[r] / v_cnt[r], 2) if v_cnt[r] > 0 else 0.0,
+            "vel_max": round(v_max[r], 2),
+            "n":       freq[r],
+        }
+        for r in _RUMBOS_ORD
+    }
+
+
 # ── V.A1: Tendencia lineal C++ (regresion_lineal) ────────────────────
 
 def _calcular_tendencia_cpp(df_eep: "pd.DataFrame",
@@ -3159,6 +3209,13 @@ def _construir_json_clima(df_eep, df_ues) -> dict:
                 for mes, mst in stats_men_ues[col].items()
             }
 
+    # Rosa de vientos interactiva (datos por rumbo)
+    print("    Rosa de vientos (datos por rumbo)…")
+    rosa = {
+        "EEP": _calcular_rosa_datos(df_eep),
+        "UES": _calcular_rosa_datos(df_ues),
+    }
+
     # Tendencia lineal C++ (regresion_lineal) por variable y sensor
     print("    Tendencia lineal C++ por variable…")
     tendencia = _calcular_tendencia_cpp(df_eep, df_ues, todas_fechas)
@@ -3176,6 +3233,7 @@ def _construir_json_clima(df_eep, df_ues) -> dict:
         "stats_mensual":     {"EEP": stats_men_eep,      "UES": stats_men_ues},
         "stats_alias":       {"EEP": stats_alias_eep,    "UES": stats_alias_ues},
         "stats_men_alias":   {"EEP": stats_men_alias_eep,"UES": stats_men_alias_ues},
+        "rosa":              rosa,
         "tendencia":         tendencia,
         "prediccion":        prediccion,
     }
@@ -3738,18 +3796,50 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
   </div>
 </div>
 
-<!-- Rosa de vientos estática (matplotlib) -->
-<div class="sec-head">Rosa de los Vientos (matplotlib — histórico completo)</div>
+<!-- Rosa de vientos interactiva (Canvas 2D) -->
+<div class="sec-head">Rosa de los Vientos — Interactiva (pasa el cursor para ver detalles)</div>
 <div class="acad-grid">
-  <div class="acad-card"><div class="acad-title">7GT-EEP</div>{img("wind_eep")}</div>
-  <div class="acad-card"><div class="acad-title">7GT-UES</div>{img("wind_ues")}</div>
+  <div class="acad-card">
+    <div class="acad-title">🌬 7GT-EEP</div>
+    <canvas id="wind-rose-eep" data-h="320" style="width:100%;height:320px"></canvas>
+    <div id="tip-wind-eep" style="min-height:20px;font-size:.72rem;color:var(--tx2);text-align:center;margin-top:6px"></div>
+  </div>
+  <div class="acad-card">
+    <div class="acad-title">🌬 7GT-UES</div>
+    <canvas id="wind-rose-ues" data-h="320" style="width:100%;height:320px"></canvas>
+    <div id="tip-wind-ues" style="min-height:20px;font-size:.72rem;color:var(--tx2);text-align:center;margin-top:6px"></div>
+  </div>
 </div>
 
 <!-- Comparativa estaciones interactiva (uPlot) -->
-<div class="sec-head">Comparativa estaciones — Temperatura · EEP vs UES</div>
+<div class="sec-head">Comparativa estaciones — EEP vs UES (variables independientes)</div>
+<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+  <div style="display:flex;align-items:center;gap:6px">
+    <span style="color:#fb923c;font-weight:600;font-size:.8rem">● EEP —</span>
+    <select id="comp-var-eep" onchange="actualizarCompUPlot()" style="background:var(--bg2);color:var(--tx1);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:.78rem;cursor:pointer">
+      <option value="temp">Temperatura</option>
+      <option value="hum">Humedad</option>
+      <option value="solar">Radiación solar</option>
+      <option value="lluvia">Lluvia acum.</option>
+      <option value="viento">Velocidad viento</option>
+      <option value="presion">Presión</option>
+    </select>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px">
+    <span style="color:#22d3ee;font-weight:600;font-size:.8rem">● UES —</span>
+    <select id="comp-var-ues" onchange="actualizarCompUPlot()" style="background:var(--bg2);color:var(--tx1);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:.78rem;cursor:pointer">
+      <option value="temp">Temperatura</option>
+      <option value="hum">Humedad</option>
+      <option value="solar">Radiación solar</option>
+      <option value="lluvia">Lluvia acum.</option>
+      <option value="viento">Velocidad viento</option>
+      <option value="presion">Presión</option>
+    </select>
+  </div>
+</div>
 <div class="uplot-card" id="card-comp" style="margin-bottom:16px">
   <div class="uplot-title">
-    <span id="comp-title">Temperatura EEP (naranja) vs UES (cian) — período seleccionado</span>
+    <span id="comp-title">Comparativa EEP vs UES — período seleccionado</span>
     <div class="zoom-controls">
       <button class="zoom-btn" onclick="uZoomComp(0.75)">＋</button>
       <button class="zoom-btn" onclick="uZoomComp(1.35)">－</button>
@@ -3845,10 +3935,34 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
       <div class="pred-badge-val" id="pred-ultima">—</div>
     </div>
   </div>
-  <div class="acad-title">🌡 Predicción temperatura próximos 30 días</div>
-  <canvas id="pred-temp-canvas" style="width:100%;max-height:200px"></canvas>
+  <div class="acad-title">🌡 Predicción temperatura próximos 30 días
+    <span id="pred-limit-label" style="font-size:.68rem;color:var(--tx3);margin-left:8px"></span>
+  </div>
+  <div class="uplot-card" id="card-pred-temp" style="margin-bottom:4px">
+    <div class="uplot-title">
+      <span>Temperatura predicha — clic para activar zoom/pan</span>
+      <div class="zoom-controls">
+        <button class="zoom-btn" onclick="_predZoom('pt',0.75)">＋</button>
+        <button class="zoom-btn" onclick="_predZoom('pt',1.35)">－</button>
+        <button class="zoom-btn" onclick="_predReset('pt')">⟳</button>
+      </div>
+    </div>
+    <div id="pred-temp-uplot" style="width:100%"></div>
+    <div class="zoom-hint">Clic para activar · Rueda para zoom · Arrastra para pan</div>
+  </div>
   <div class="acad-title" style="margin-top:16px">☀ Predicción radiación solar próximos 30 días</div>
-  <canvas id="pred-solar-canvas" style="width:100%;max-height:200px"></canvas>
+  <div class="uplot-card" id="card-pred-solar" style="margin-bottom:4px">
+    <div class="uplot-title">
+      <span>Radiación solar predicha — clic para activar zoom/pan</span>
+      <div class="zoom-controls">
+        <button class="zoom-btn" onclick="_predZoom('ps',0.75)">＋</button>
+        <button class="zoom-btn" onclick="_predZoom('ps',1.35)">－</button>
+        <button class="zoom-btn" onclick="_predReset('ps')">⟳</button>
+      </div>
+    </div>
+    <div id="pred-solar-uplot" style="width:100%"></div>
+    <div class="zoom-hint">Clic para activar · Rueda para zoom · Arrastra para pan</div>
+  </div>
   <div style="margin-top:12px">
     <table class="ct" id="pred-table">
       <thead><tr>
@@ -4113,9 +4227,9 @@ function mkUOpts(containerId, titulo, series, height){{
     title:  '',
     cursor: {{
       sync: {{ key: 'clima-sync' }},
-      drag: {{ x:true, y:false, uni:10 }},
+      drag: {{ x:false, y:false, uni:0 }},  // deshabilitar drag-to-zoom; pan es manual
     }},
-    select: {{ show:true }},
+    select: {{ show:false }},  // deshabilitar selección de zoom con arrastre
     legend: {{ show:true, live:true, markers:{{ width:2 }} }},
     scales: {{
       x: {{ time:true }},
@@ -4164,13 +4278,10 @@ function mkUOpts(containerId, titulo, series, height){{
         const card = over.closest('.uplot-card');
         card.addEventListener('wheel', e => {{
           if(!card.classList.contains('chart-active')){{
-            // Primer contacto con la rueda → activar la gráfica
-            e.preventDefault();
-            const idCard = card.id.replace('card-','');
-            toggleChartActive(idCard);
+            // No activa → dejar que el scroll siga normalmente en la página
             return;
           }}
-          // Ya activa → hacer zoom
+          // Ya activa → hacer zoom (se activa solo con clic)
           e.preventDefault();
           const sc    = u.scales.x;
           const range = sc.max - sc.min;
@@ -5333,7 +5444,7 @@ function renderEventosExtremos(datos){{
   ).join('');
 }}
 
-// ── Comparativa EEP vs UES sobre uPlot ──────────────────────────────
+// ── Comparativa EEP vs UES sobre uPlot (variables independientes) ───
 let uComp = null;
 
 function actualizarCompUPlot(datos){{
@@ -5343,41 +5454,48 @@ function actualizarCompUPlot(datos){{
   if(!el) return;
   el.innerHTML = '';
 
-  const esDia = periodo==='dia' && datos.length===1
+  // Variables seleccionadas independientemente para cada estación
+  const varEEP = document.getElementById('comp-var-eep')?.value || acadVar;
+  const varUES = document.getElementById('comp-var-ues')?.value || acadVar;
+  const metaEEP = ACAD_META[varEEP] || ACAD_META.temp;
+  const metaUES = ACAD_META[varUES] || ACAD_META.temp;
+
+  const esDia = periodo==='dia' && datos && datos.length===1
                 && datos[0].d.horas?.t?.length > 0;
 
-  // Construir serie EEP y UES para la variable académica activa
   let labelsC = [], sEEP = [], sUES = [];
 
   if(esDia){{
     labelsC = datos[0].d.horas.t || [];
-    sEEP    = datos[0].d.horas[acadVar] || labelsC.map(()=>null);
-    // Para UES en modo día necesitamos los datos del mismo día en UES
+    sEEP    = datos[0].d.horas[varEEP] || labelsC.map(()=>null);
     const dUES = CLIMA.dias[datos[0].fecha]?.UES?.horas;
-    sUES = dUES ? (dUES[acadVar] || labelsC.map(()=>null)) : labelsC.map(()=>null);
-  }} else {{
+    sUES = dUES ? (dUES[varUES] || labelsC.map(()=>null)) : labelsC.map(()=>null);
+  }} else if(datos) {{
     labelsC = datos.map(e=>e.fecha.slice(5));
     sEEP = datos.map(e=>{{
       const obj = CLIMA.dias[e.fecha]?.EEP;
-      const v = obj?.[acadVar]; return (v!=null&&!isNaN(v))?v:null;
+      const v = obj?.[varEEP]; return (v!=null&&!isNaN(v))?v:null;
     }});
     sUES = datos.map(e=>{{
       const obj = CLIMA.dias[e.fecha]?.UES;
-      const v = obj?.[acadVar]; return (v!=null&&!isNaN(v))?v:null;
+      const v = obj?.[varUES]; return (v!=null&&!isNaN(v))?v:null;
     }});
   }}
 
-  const meta   = ACAD_META[acadVar] || ACAD_META.temp;
-  const fechaBase = esDia ? datos[0].fecha : (diaSelec||datos[0].fecha);
-  const ts     = etiquetasATimestamps(labelsC, esDia, fechaBase);
+  const fechaBase = esDia && datos ? datos[0].fecha : (diaSelec || '2025-01-01');
+  const ts = etiquetasATimestamps(labelsC, esDia, fechaBase);
 
-  document.getElementById('comp-title').textContent =
-    meta.label+' — EEP (naranja) vs UES (cian) · '+periodoLabel;
+  const mismaVar = varEEP === varUES;
+  const tituloComp = mismaVar
+    ? `${{metaEEP.label}} — EEP (naranja) vs UES (cian) · ${{periodoLabel}}`
+    : `EEP: ${{metaEEP.label}} (naranja) vs UES: ${{metaUES.label}} (cian) · ${{periodoLabel}}`;
+  document.getElementById('comp-title').textContent = tituloComp;
 
   const W = el.offsetWidth || 800;
   uComp = new uPlot({{
     width: W, height: 200,
-    cursor: {{ sync:{{ key:'clima-sync' }} }},
+    cursor: {{ sync:{{ key:'clima-sync' }}, drag:{{x:false,y:false}} }},
+    select: {{ show:false }},
     legend: {{ show:true, live:true }},
     scales: {{ x:{{ time:true }} }},
     axes: [
@@ -5390,19 +5508,22 @@ function actualizarCompUPlot(datos){{
                              :String(mo)+'/'+String(dy).padStart(2,'0');
          }})
       }},
-      {{ stroke:'#fb923c', grid:{{stroke:C.grid,width:1}}, font:'10px Outfit,sans-serif' }},
+      {{ stroke:'#fb923c', grid:{{stroke:C.grid,width:1}}, font:'10px Outfit,sans-serif',
+         label: metaEEP.unit }},
     ],
     series: [
       {{ label:'Tiempo' }},
-      {{ label:'EEP '+meta.label, stroke:'#fb923c', fill:'rgba(251,146,60,.10)', width:1.8 }},
-      {{ label:'UES '+meta.label, stroke:'#38bdf8', fill:'rgba(56,189,248,.08)',  width:1.8 }},
+      {{ label:'EEP · '+metaEEP.label+' '+metaEEP.unit, stroke:'#fb923c',
+         fill:'rgba(251,146,60,.10)', width:1.8 }},
+      {{ label:'UES · '+metaUES.label+' '+metaUES.unit, stroke:'#38bdf8',
+         fill:'rgba(56,189,248,.08)', width:1.8 }},
     ],
     hooks:{{
       ready:[u=>{{
         const ov = u.over;
         let dr=false,sx=0,sm,sM;
         ov.addEventListener('mousedown',e=>{{
-          if(!ov.closest('.chart-active')||e.button!==0) return;
+          if(!ov.closest('.uplot-card')?.classList.contains('chart-active')||e.button!==0) return;
           dr=true; sx=e.clientX; sm=u.scales.x.min; sM=u.scales.x.max;
         }});
         window.addEventListener('mousemove',e=>{{
@@ -5413,11 +5534,7 @@ function actualizarCompUPlot(datos){{
         window.addEventListener('mouseup',()=>{{dr=false;}});
         const cardC = ov.closest('.uplot-card');
         cardC.addEventListener('wheel',e=>{{
-          if(!cardC.classList.contains('chart-active')){{
-            e.preventDefault();
-            toggleChartActive('comp');
-            return;
-          }}
+          if(!cardC.classList.contains('chart-active')) return;
           e.preventDefault();
           const sc=u.scales.x,rng=sc.max-sc.min,f=e.deltaY>0?1.25:0.8;
           const rc=ov.getBoundingClientRect(),rt=(e.clientX-rc.left)/rc.width;
@@ -5492,6 +5609,174 @@ const _acadObserver = new IntersectionObserver((entries) => {{
 function iniciarObserverAcad(){{
   const sec = document.getElementById('acad-section');
   if(sec) _acadObserver.observe(sec);
+}}
+
+// ══ ROSA DE VIENTOS INTERACTIVA (Canvas 2D) ══════════════════════════
+
+const _RUMBOS16 = ["N","NNE","NE","ENE","E","ESE","SE","SSE",
+                   "S","SSW","SW","WSW","W","WNW","NW","NNW"];
+
+function dibujarRosaVientos(canvasId, datos, tooltipId) {{
+  const cv = document.getElementById(canvasId);
+  const tipEl = document.getElementById(tooltipId);
+  if(!cv || !datos) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.offsetWidth || 320;
+  const H = parseInt(cv.getAttribute('data-h')) || 320;
+  cv.width  = W * dpr;
+  cv.height = H * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const cx = W/2, cy = H/2;
+  const maxR = Math.min(cx, cy) - 36;
+
+  // Máx porcentaje para escalar
+  const maxPct = Math.max(..._RUMBOS16.map(r => datos[r]?.pct || 0), 1);
+
+  // Círculos de referencia
+  ctx.strokeStyle = 'rgba(255,255,255,.07)';
+  ctx.lineWidth   = 1;
+  for(let i=1; i<=4; i++) {{
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxR*i/4, 0, Math.PI*2);
+    ctx.stroke();
+  }}
+  // Etiquetas de %
+  ctx.fillStyle = 'rgba(148,163,184,.6)';
+  ctx.font = '9px DM Mono, monospace';
+  ctx.textAlign = 'center';
+  for(let i=1; i<=4; i++) {{
+    const val = (maxPct*i/4).toFixed(1);
+    ctx.fillText(val+'%', cx+4, cy - maxR*i/4 + 3);
+  }}
+
+  // Ejes cardinales
+  ctx.strokeStyle = 'rgba(255,255,255,.12)';
+  ctx.lineWidth   = 1;
+  [0,45,90,135].forEach(deg => {{
+    const rad = deg * Math.PI/180;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.sin(rad)*(maxR+8), cy - Math.cos(rad)*(maxR+8));
+    ctx.stroke();
+  }});
+
+  // Sectores
+  const sectorRad = (Math.PI*2) / 16;
+  _RUMBOS16.forEach((rumbo, i) => {{
+    const d = datos[rumbo] || {{pct:0, vel_med:0}};
+    const r = maxR * (d.pct / maxPct);
+    const startAng = -Math.PI/2 + i*sectorRad - sectorRad/2;
+    const endAng   = startAng + sectorRad;
+    const vm = d.vel_med;
+    const color = vm < 5  ? '#38bdf8' :
+                  vm < 10 ? '#4ade80' :
+                  vm < 20 ? '#fbbf24' : '#f87171';
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, startAng, endAng);
+    ctx.closePath();
+    ctx.fillStyle   = color + 'cc';
+    ctx.strokeStyle = color + '55';
+    ctx.lineWidth   = 1;
+    ctx.fill();
+    ctx.stroke();
+  }});
+
+  // Etiquetas N / S / E / W
+  const cardLabels = [['N',0],['E',90],['S',180],['W',270]];
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = 'bold 11px Outfit, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  cardLabels.forEach(([lbl, deg]) => {{
+    const rad = deg * Math.PI/180;
+    const lx = cx + Math.sin(rad)*(maxR+20);
+    const ly = cy - Math.cos(rad)*(maxR+20);
+    ctx.fillText(lbl, lx, ly);
+  }});
+
+  // Leyenda velocidad
+  const leg = [['<5','#38bdf8'],['5–10','#4ade80'],['10–20','#fbbf24'],['>20','#f87171']];
+  let lx0 = 6, ly0 = H - 18;
+  ctx.font = '9px Outfit, sans-serif';
+  leg.forEach(([lbl,col]) => {{
+    ctx.fillStyle = col+'cc';
+    ctx.fillRect(lx0, ly0, 10, 10);
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(lbl+' km/h', lx0+13, ly0+5);
+    lx0 += 72;
+  }});
+
+  // Punto central
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3, 0, Math.PI*2);
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fill();
+
+  // Interactividad: hover para mostrar rumbo bajo el cursor
+  cv._rosaData = datos;
+  cv._rosaCx = cx; cv._rosaCy = cy; cv._rosaMaxR = maxR; cv._rosaMaxPct = maxPct;
+  cv._rosaTip = tipEl;
+  cv.onmousemove = function(e) {{
+    const rect = cv.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (W / rect.width);
+    const my = (e.clientY - rect.top)  * (H / rect.height);
+    const dx = mx - cx, dy = my - cy;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if(dist < 6 || dist > maxR + 4) {{
+      if(tipEl) tipEl.textContent = '';
+      return;
+    }}
+    // Ángulo desde el norte, sentido horario
+    let ang = Math.atan2(dx, -dy) * 180/Math.PI;
+    if(ang < 0) ang += 360;
+    const idx = Math.round(ang / 22.5) % 16;
+    const rumbo = _RUMBOS16[idx];
+    const d = datos[rumbo] || {{pct:0, vel_med:0, vel_max:0, n:0}};
+    if(tipEl) tipEl.textContent =
+      `${{rumbo}} — ${{d.pct.toFixed(2)}}% del tiempo · vel.med ${{d.vel_med.toFixed(1)}} km/h · vel.máx ${{d.vel_max.toFixed(1)}} km/h · ${{d.n}} registros`;
+    // Resaltar sector activo
+    dibujarRosaVientos(canvasId, datos, tooltipId);  // redibuja base
+    _resaltarSector(ctx, cx, cy, maxR, maxPct, idx, datos, dpr);
+  }};
+  cv.onmouseleave = function() {{
+    if(tipEl) tipEl.textContent = '';
+    dibujarRosaVientos(canvasId, datos, tooltipId);
+  }};
+}}
+
+function _resaltarSector(ctx, cx, cy, maxR, maxPct, idx, datos, dpr) {{
+  const sectorRad = (Math.PI*2) / 16;
+  const rumbo = _RUMBOS16[idx];
+  const d = datos[rumbo] || {{pct:0, vel_med:0}};
+  const r = Math.max(maxR * (d.pct / maxPct), 4);
+  const startAng = -Math.PI/2 + idx*sectorRad - sectorRad/2;
+  const endAng   = startAng + sectorRad;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, r+6, startAng, endAng);
+  ctx.closePath();
+  ctx.strokeStyle = '#ffffff88';
+  ctx.lineWidth   = 2;
+  ctx.stroke();
+  ctx.restore();
+}}
+
+function initRosaVientos() {{
+  if(!CLIMA.rosa) return;
+  dibujarRosaVientos('wind-rose-eep', CLIMA.rosa.EEP, 'tip-wind-eep');
+  dibujarRosaVientos('wind-rose-ues', CLIMA.rosa.UES, 'tip-wind-ues');
+  window.addEventListener('resize', () => {{
+    dibujarRosaVientos('wind-rose-eep', CLIMA.rosa.EEP, 'tip-wind-eep');
+    dibujarRosaVientos('wind-rose-ues', CLIMA.rosa.UES, 'tip-wind-ues');
+  }});
 }}
 
 // ── Debounce ─────────────────────────────────────────────────────────
@@ -5804,11 +6089,78 @@ function dibujarCompChart(canvas, datA, datB){{
 }}
 
 // ── Modelo Predictivo: renderizar al cargar ───────────────────────────
+// ── Modelo Predictivo: gráficas uPlot reactivas ─────────────────────
+const _predU = {{pt:null, ps:null}};
+
+function _mkPredUPlot(elId, cardId, ts, vals, color, unit){{
+  const el = document.getElementById(elId);
+  if(!el || !ts.length) return null;
+  el.innerHTML = '';
+  const W = el.offsetWidth || 800;
+  const u = new uPlot({{
+    width: W, height: 180,
+    cursor: {{ drag:{{x:false,y:false}} }},
+    select: {{ show:false }},
+    legend: {{ show:false }},
+    scales: {{ x:{{time:true}} }},
+    axes: [
+      {{ stroke:C.axis, grid:{{stroke:C.grid,width:1}}, font:'10px Outfit,sans-serif',
+         values:(u,vs)=>vs.map(v=>{{
+           if(v==null) return '';
+           const d=new Date(v*1000);
+           return (d.getMonth()+1)+'/'+String(d.getDate()).padStart(2,'0');
+         }})
+      }},
+      {{ stroke:color, grid:{{stroke:C.grid,width:1}}, font:'10px Outfit,sans-serif',
+         label:unit, labelSize:12 }},
+    ],
+    series: [
+      {{}},
+      {{ stroke:color, fill:color+'22', width:2,
+         paths: uPlot.paths.spline() }},
+    ],
+    hooks:{{ ready:[u=>{{
+      const ov = u.over;
+      let dr=false,sx=0,sm,sM;
+      ov.addEventListener('mousedown',e=>{{
+        const card=ov.closest('.uplot-card');
+        if(!card?.classList.contains('chart-active')||e.button!==0) return;
+        dr=true; sx=e.clientX; sm=u.scales.x.min; sM=u.scales.x.max;
+      }});
+      window.addEventListener('mousemove',e=>{{
+        if(!dr) return;
+        const dx=e.clientX-sx, rng=sM-sm, sh=-(dx/ov.offsetWidth)*rng;
+        u.setScale('x',{{min:sm+sh,max:sM+sh}});
+      }});
+      window.addEventListener('mouseup',()=>{{dr=false;}});
+      const card = ov.closest('.uplot-card');
+      card.addEventListener('wheel',e=>{{
+        if(!card.classList.contains('chart-active')) return;
+        e.preventDefault();
+        const sc=u.scales.x,rng=sc.max-sc.min,f=e.deltaY>0?1.25:0.8;
+        const rc=ov.getBoundingClientRect(),rt=(e.clientX-rc.left)/rc.width;
+        const pv=sc.min+rt*rng,nr=rng*f;
+        u.setScale('x',{{min:pv-rt*nr,max:pv+(1-rt)*nr}});
+      }},{{passive:false}});
+      ov.addEventListener('click',()=>{{
+        if(!card.classList.contains('chart-active')) toggleChartActive(cardId.replace('card-',''));
+      }});
+      ov.addEventListener('dblclick',()=>{{
+        u.setScale('x',{{min:u.data[0][0],max:u.data[0][u.data[0].length-1]}});
+      }});
+    }}] }}
+  }}, [ts, vals], el);
+  requestAnimationFrame(()=>{{
+    const w2=el.offsetWidth||800;
+    if(u) u.setSize({{width:w2,height:180}});
+  }});
+  return u;
+}}
+
 function renderPrediccion(){{
   const P = CLIMA.prediccion;
   if(!P || P.error) return;
 
-  // Badges de información
   const set = (id, v) => {{ const el=document.getElementById(id); if(el) el.textContent=v; }};
   set('pred-tipo',    'Polinomial grado 3 (C++ AjusteCurvas)');
   set('pred-n',       P.n_datos + ' días');
@@ -5821,61 +6173,22 @@ function renderPrediccion(){{
   }}
 
   const preds = P.predicciones || [];
-  const labels = preds.map(p=>p.fecha.slice(5));
+  if(!preds.length) return;
 
-  // Gráfica temperatura
-  if(preds.some(p=>p.temp!=null)){{
-    const tVals = preds.map(p=>p.temp??null);
-    const cvT = document.getElementById('pred-temp-canvas');
-    if(cvT){{
-      new Chart(cvT, {{
-        type:'line',
-        data:{{ labels, datasets:[{{
-          label:'Temp predicha (°C)', data:tVals,
-          borderColor:'#f87171', backgroundColor:'#f8717122',
-          fill:true, tension:.4, pointRadius:3,
-          borderDash:[6,3], borderWidth:2
-        }}] }},
-        options:{{
-          responsive:true, animation:false,
-          plugins:{{legend:{{display:false}},
-            tooltip:{{callbacks:{{label:c=>c.raw.toFixed(1)+' °C'}}}}}},
-          scales:{{
-            x:{{ticks:{{color:'#64748b',font:{{size:9}}}},grid:{{color:'rgba(255,255,255,.04)'}}}},
-            y:{{ticks:{{color:'#64748b',font:{{size:9}}}},grid:{{color:'rgba(255,255,255,.04)'}},
-               title:{{display:true,text:'°C',color:'#64748b',font:{{size:9}}}}}},
-          }}
-        }}
-      }});
-    }}
-  }}
+  // Límite de predicción = última fecha predicha
+  const ultimaPred = preds[preds.length-1].fecha;
+  const lbl = document.getElementById('pred-limit-label');
+  if(lbl) lbl.textContent = `· hasta ${{ultimaPred}} (límite modelo)`;
 
-  // Gráfica solar
-  if(preds.some(p=>p.solar!=null)){{
-    const sVals = preds.map(p=>p.solar??null);
-    const cvS = document.getElementById('pred-solar-canvas');
-    if(cvS){{
-      new Chart(cvS, {{
-        type:'line',
-        data:{{ labels, datasets:[{{
-          label:'Solar predicha (W/m²)', data:sVals,
-          borderColor:'#fbbf24', backgroundColor:'#fbbf2422',
-          fill:true, tension:.4, pointRadius:3,
-          borderDash:[6,3], borderWidth:2
-        }}] }},
-        options:{{
-          responsive:true, animation:false,
-          plugins:{{legend:{{display:false}},
-            tooltip:{{callbacks:{{label:c=>c.raw.toFixed(1)+' W/m²'}}}}}},
-          scales:{{
-            x:{{ticks:{{color:'#64748b',font:{{size:9}}}},grid:{{color:'rgba(255,255,255,.04)'}}}},
-            y:{{ticks:{{color:'#64748b',font:{{size:9}}}},grid:{{color:'rgba(255,255,255,.04)'}},
-               title:{{display:true,text:'W/m²',color:'#64748b',font:{{size:9}}}}}},
-          }}
-        }}
-      }});
-    }}
-  }}
+  // Convertir fechas a timestamps Unix para uPlot
+  const ts = preds.map(p => new Date(p.fecha+'T12:00:00').getTime()/1000);
+  const tVals  = preds.map(p => p.temp  ?? null);
+  const sVals  = preds.map(p => p.solar ?? null);
+
+  if(_predU.pt){{ _predU.pt.destroy(); _predU.pt=null; }}
+  if(_predU.ps){{ _predU.ps.destroy(); _predU.ps=null; }}
+  _predU.pt = _mkPredUPlot('pred-temp-uplot',  'card-pred-temp',  ts, tVals,  '#f87171', '°C');
+  _predU.ps = _mkPredUPlot('pred-solar-uplot', 'card-pred-solar', ts, sVals, '#fbbf24', 'W/m²');
 
   // Tabla de predicciones
   const tbody = document.getElementById('pred-tbody');
@@ -5891,6 +6204,17 @@ function renderPrediccion(){{
   }}
 }}
 
+// Controles zoom predicción
+function _predZoom(key,f){{
+  const u=_predU[key]; if(!u) return;
+  const sc=u.scales.x,mid=(sc.min+sc.max)/2,h=(sc.max-sc.min)/2*f;
+  u.setScale('x',{{min:mid-h,max:mid+h}});
+}}
+function _predReset(key){{
+  const u=_predU[key]; if(!u) return;
+  u.setScale('x',{{min:u.data[0][0],max:u.data[0][u.data[0].length-1]}});
+}}
+
 // ── Actualizar date input del navbar con el día seleccionado ──────────
 function syncNavDateInput(){{
   const inp = document.getElementById('nav-cal-input');
@@ -5900,10 +6224,35 @@ function syncNavDateInput(){{
 // ── Arranque ──
 init();
 iniciarObserverAcad();
+
+/* ══ FOOTER AUTORES ══════════════════════════════════════════════════ */
+(function insertarFooter(){{
+  const footer = document.createElement('footer');
+  footer.style.cssText =
+    'background:var(--bg1);border-top:1px solid var(--border);padding:24px 32px 32px;'+
+    'margin-top:40px;text-align:center;font-size:.72rem;color:var(--tx3);line-height:1.8';
+  footer.innerHTML = `
+    <div style="font-size:.65rem;letter-spacing:.12em;color:var(--tx3);margin-bottom:8px">
+      ANÁLISIS CLIMÁTICO Y FOTOVOLTAICO — CICLO I-2026 · AEL115 · UES-FIA
+    </div>
+    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px 28px;color:var(--tx2)">
+      <span>MAURICIO A. MUÑOZ CONTRERAS &nbsp;<code style="color:var(--tx3)">MC24021</code></span>
+      <span>MARCELO X. MOLINA GOMEZ &nbsp;<code style="color:var(--tx3)">MG24048</code></span>
+      <span>DIEGO J. MENDOZA PRUDENCIO &nbsp;<code style="color:var(--tx3)">MP24048</code></span>
+      <span>FERNANDO J. PADILLA CRUZ &nbsp;<code style="color:var(--tx3)">PC24039</code></span>
+      <span>OSCAR M. VELASQUEZ VILLANUEVA &nbsp;<code style="color:var(--tx3)">VV24002</code></span>
+    </div>
+    <div style="margin-top:10px;font-size:.63rem;color:var(--tx3)">
+      © 2026 — Todos los derechos reservados · Universidad de El Salvador, Facultad de Ingeniería y Arquitectura
+    </div>`;
+  document.body.appendChild(footer);
+}})();
 // Sincronizar input de fecha con diaSelec inicial
 setTimeout(syncNavDateInput, 200);
 // Renderizar modelo predictivo
 setTimeout(renderPrediccion, 300);
+// Rosa de vientos interactiva
+setTimeout(initRosaVientos, 150);
 </script>
 </body></html>"""
 
