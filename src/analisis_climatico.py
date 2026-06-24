@@ -3689,11 +3689,19 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
   <div class="comp-row">
     <div class="comp-group">
       <label><span class="comp-badge-a">▶ Rango A</span></label>
+      <select id="comp-a-sensor" style="background:var(--bg3,#1e293b);color:var(--tx1);border:1px solid var(--border,#334155);border-radius:6px;padding:5px 8px;font-size:.78rem;width:100%;cursor:pointer;margin-bottom:4px">
+        <option value="EEP">Estación EEP (San Luis Talpa)</option>
+        <option value="UES">Estación UES (Universitaria)</option>
+      </select>
       <input type="date" class="date-inp" id="comp-a-desde" onchange="actualizarEtiquetasComp()">
       <input type="date" class="date-inp" id="comp-a-hasta" onchange="actualizarEtiquetasComp()">
     </div>
     <div class="comp-group">
       <label><span class="comp-badge-b">▶ Rango B</span></label>
+      <select id="comp-b-sensor" style="background:var(--bg3,#1e293b);color:var(--tx1);border:1px solid var(--border,#334155);border-radius:6px;padding:5px 8px;font-size:.78rem;width:100%;cursor:pointer;margin-bottom:4px">
+        <option value="UES">Estación UES (Universitaria)</option>
+        <option value="EEP">Estación EEP (San Luis Talpa)</option>
+      </select>
       <input type="date" class="date-inp" id="comp-b-desde" onchange="actualizarEtiquetasComp()">
       <input type="date" class="date-inp" id="comp-b-hasta" onchange="actualizarEtiquetasComp()">
     </div>
@@ -3809,45 +3817,6 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
     <canvas id="wind-rose-ues" data-h="320" style="width:100%;height:320px"></canvas>
     <div id="tip-wind-ues" style="min-height:20px;font-size:.72rem;color:var(--tx2);text-align:center;margin-top:6px"></div>
   </div>
-</div>
-
-<!-- Comparativa estaciones interactiva (uPlot) -->
-<div class="sec-head">Comparativa estaciones — EEP vs UES (variables independientes)</div>
-<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
-  <div style="display:flex;align-items:center;gap:6px">
-    <span style="color:#fb923c;font-weight:600;font-size:.8rem">● EEP —</span>
-    <select id="comp-var-eep" onchange="actualizarCompUPlot()" style="background:var(--bg2);color:var(--tx1);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:.78rem;cursor:pointer">
-      <option value="temp">Temperatura</option>
-      <option value="hum">Humedad</option>
-      <option value="solar">Radiación solar</option>
-      <option value="lluvia">Lluvia acum.</option>
-      <option value="viento">Velocidad viento</option>
-      <option value="presion">Presión</option>
-    </select>
-  </div>
-  <div style="display:flex;align-items:center;gap:6px">
-    <span style="color:#22d3ee;font-weight:600;font-size:.8rem">● UES —</span>
-    <select id="comp-var-ues" onchange="actualizarCompUPlot()" style="background:var(--bg2);color:var(--tx1);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:.78rem;cursor:pointer">
-      <option value="temp">Temperatura</option>
-      <option value="hum">Humedad</option>
-      <option value="solar">Radiación solar</option>
-      <option value="lluvia">Lluvia acum.</option>
-      <option value="viento">Velocidad viento</option>
-      <option value="presion">Presión</option>
-    </select>
-  </div>
-</div>
-<div class="uplot-card" id="card-comp" style="margin-bottom:16px">
-  <div class="uplot-title">
-    <span id="comp-title">Comparativa EEP vs UES — período seleccionado</span>
-    <div class="zoom-controls">
-      <button class="zoom-btn" onclick="uZoomComp(0.75)">＋</button>
-      <button class="zoom-btn" onclick="uZoomComp(1.35)">－</button>
-      <button class="zoom-btn" onclick="uZoomCompReset()">⟳</button>
-    </div>
-  </div>
-  <div id="uplot-comp" style="width:100%"></div>
-  <div class="zoom-hint" id="hint-comp">Clic para activar · Rueda para zoom · Arrastra para pan</div>
 </div>
 
 <!-- ══ MAPA DE CALOR POR HORA DEL DÍA ══ -->
@@ -5230,10 +5199,7 @@ function actualizarGraficosAcad(datos){{
   // ── 9) EVENTOS EXTREMOS ────────────────────────────────────────────
   try {{ renderEventosExtremos(datos); }} catch(e) {{}}
 
-  // ── 10) COMPARATIVA EEP vs UES (uPlot interactivo) ─────────────────
-  actualizarCompUPlot(datos);
-
-  // ── 11) ROSA DE VIENTOS — reactiva según período ─────────────────
+  // ── 10) ROSA DE VIENTOS — reactiva según período ─────────────────
   try {{ actualizarRosaVientos(datos); }} catch(e) {{}}
 }}
 
@@ -5625,7 +5591,12 @@ function dibujarRosaVientos(canvasId, datos, tooltipId) {{
   if(!cv || !datos) return;
 
   const dpr = window.devicePixelRatio || 1;
-  const W = cv.offsetWidth || 320;
+  const W = cv.offsetWidth || cv.parentElement?.offsetWidth || 0;
+  if(W === 0) {{
+    // Canvas no visible aún — reintentar cuando el layout esté listo
+    requestAnimationFrame(() => dibujarRosaVientos(canvasId, datos, tooltipId));
+    return;
+  }}
   const H = parseInt(cv.getAttribute('data-h')) || 320;
   cv.width  = W * dpr;
   cv.height = H * dpr;
@@ -5811,35 +5782,40 @@ function calcularRosaLocal(fechas, sensorKey) {{
   return result;
 }}
 
+// Última rosa calculada para el período activo (se actualiza con cada cambio de rango)
+let _rosaActual = null;
+
 function actualizarRosaVientos(datos) {{
-  // Obtener lista de fechas filtradas para cada sensor
-  const fechasEEP = fechasConSensor('EEP').filter(f => {{
-    // En modo día solo la fecha seleccionada, en otros el rango activo
-    const primerFecha = datos[0]?.fecha;
-    const ultFecha    = datos[datos.length-1]?.fecha;
-    return primerFecha && ultFecha ? (f >= primerFecha && f <= ultFecha) : true;
-  }});
-  const fechasUES = fechasConSensor('UES').filter(f => {{
-    const primerFecha = datos[0]?.fecha;
-    const ultFecha    = datos[datos.length-1]?.fecha;
-    return primerFecha && ultFecha ? (f >= primerFecha && f <= ultFecha) : true;
-  }});
+  // Obtener lista de fechas del período activo para cada sensor
+  const primerFecha = datos[0]?.fecha;
+  const ultFecha    = datos[datos.length-1]?.fecha;
+
+  const fechasEEP = fechasConSensor('EEP').filter(
+    f => primerFecha && ultFecha ? (f >= primerFecha && f <= ultFecha) : true
+  );
+  const fechasUES = fechasConSensor('UES').filter(
+    f => primerFecha && ultFecha ? (f >= primerFecha && f <= ultFecha) : true
+  );
 
   const rosaEEP = calcularRosaLocal(fechasEEP, 'EEP');
   const rosaUES = calcularRosaLocal(fechasUES, 'UES');
+  _rosaActual = {{ EEP: rosaEEP, UES: rosaUES }};
 
   dibujarRosaVientos('wind-rose-eep', rosaEEP, 'tip-wind-eep');
   dibujarRosaVientos('wind-rose-ues', rosaUES, 'tip-wind-ues');
 }}
 
 function initRosaVientos() {{
-  // Arranque: usar datos históricos completos de CLIMA.rosa
+  // Arranque: usar datos históricos completos mientras no haya período activo
   const rosaEEP = CLIMA.rosa?.EEP;
   const rosaUES = CLIMA.rosa?.UES;
+  _rosaActual = {{ EEP: rosaEEP, UES: rosaUES }};
   if(rosaEEP) dibujarRosaVientos('wind-rose-eep', rosaEEP, 'tip-wind-eep');
   if(rosaUES) dibujarRosaVientos('wind-rose-ues', rosaUES, 'tip-wind-ues');
+
+  // Al redimensionar, usar siempre la rosa del período activo
   window.addEventListener('resize', () => {{
-    const r = CLIMA.rosa;
+    const r = _rosaActual || CLIMA.rosa;
     if(r?.EEP) dibujarRosaVientos('wind-rose-eep', r.EEP, 'tip-wind-eep');
     if(r?.UES) dibujarRosaVientos('wind-rose-ues', r.UES, 'tip-wind-ues');
   }});
@@ -5947,32 +5923,34 @@ function toggleComparacion(){{
 }}
 
 function _prefillCompDates(){{
-  const sens = sensor || 'EEP';
-  const dias = fechasConSensor(sens).sort();
-  if(!dias.length) return;
-  const mid = dias[Math.floor(dias.length/2)];
-  const last = dias[dias.length-1];
-  const ainp = d => document.getElementById(d);
-  if(!ainp('comp-a-desde').value) ainp('comp-a-desde').value = dias[0];
-  if(!ainp('comp-a-hasta').value) ainp('comp-a-hasta').value = mid;
-  if(!ainp('comp-b-desde').value) ainp('comp-b-desde').value = mid;
-  if(!ainp('comp-b-hasta').value) ainp('comp-b-hasta').value = last;
+  // Usar la unión de fechas disponibles para pre-rellenar
+  const diasEEP = fechasConSensor('EEP');
+  const diasUES = fechasConSensor('UES');
+  const todos = [...new Set([...diasEEP, ...diasUES])].sort();
+  if(!todos.length) return;
+  const mid  = todos[Math.floor(todos.length/2)];
+  const last = todos[todos.length-1];
+  const ainp = id => document.getElementById(id);
+  if(!ainp('comp-a-desde')?.value) ainp('comp-a-desde').value = todos[0];
+  if(!ainp('comp-a-hasta')?.value) ainp('comp-a-hasta').value = mid;
+  if(!ainp('comp-b-desde')?.value) ainp('comp-b-desde').value = mid;
+  if(!ainp('comp-b-hasta')?.value) ainp('comp-b-hasta').value = last;
 }}
 
 function actualizarEtiquetasComp(){{ /* hook for future live update */ }}
 
-function getDatosRango(desde, hasta){{
+function getDatosRango(desde, hasta, sens){{
   if(!desde || !hasta) return [];
-  const sens = sensor || 'EEP';
-  const dias = fechasConSensor(sens).filter(d => d >= desde && d <= hasta).sort();
-  return dias.map(d => ({{fecha:d, dia:CLIMA.dias[d]}}));
+  const s = sens || sensor || 'EEP';
+  const dias = fechasConSensor(s).filter(d => d >= desde && d <= hasta).sort();
+  return dias.map(d => ({{fecha:d, dia:CLIMA.dias[d], sensor:s}}));
 }}
 
-function _extraerValores(entradas, clave){{
+function _extraerValores(entradas, clave, sensOverride){{
   const vals = [];
-  const sens = sensor || 'EEP';
   entradas.forEach(e => {{
-    const diaObj = e.dia && e.dia[sens];
+    const s = sensOverride || e.sensor || sensor || 'EEP';
+    const diaObj = e.dia && e.dia[s];
     if(!diaObj) return;
     const horas = diaObj.horas;
     if(!horas) return;
@@ -6016,11 +5994,13 @@ function renderComparacion(){{
   const aH = document.getElementById('comp-a-hasta').value;
   const bD = document.getElementById('comp-b-desde').value;
   const bH = document.getElementById('comp-b-hasta').value;
+  const sensA = document.getElementById('comp-a-sensor')?.value || 'EEP';
+  const sensB = document.getElementById('comp-b-sensor')?.value || 'UES';
   if(!aD||!aH||!bD||!bH){{ alert('Selecciona ambos rangos completos.'); return; }}
 
-  const entA = getDatosRango(aD, aH);
-  const entB = getDatosRango(bD, bH);
-  const variables = ['temp','hum','presion','viento','lluvia'];
+  const entA = getDatosRango(aD, aH, sensA);
+  const entB = getDatosRango(bD, bH, sensB);
+  const variables = ['temp','hum','presion','viento','lluvia','solar'];
   const claveTab = (tabActiva&&tabActiva!=='general') ? tabActiva : 'temp';
 
   // Tabla stats
@@ -6039,9 +6019,9 @@ function renderComparacion(){{
       <tr>
         <td class="var-name">${{_etiquetaVariable(k)}}</td>
         <td>${{sA.n}}</td><td>${{sA.media.toFixed(2)}}</td><td>${{(sA.sigma||0).toFixed(2)}}</td>
-        <td>${{(sA.vmin||0).toFixed(2)}}</td><td>${{(sA.vmax||0).toFixed(2)}}</td>
+        <td>${{(sA.vmin!=null?sA.vmin.toFixed(2):'—')}}</td><td>${{(sA.vmax!=null?sA.vmax.toFixed(2):'—')}}</td>
         <td>${{sB.n}}</td><td>${{sB.media.toFixed(2)}}</td><td>${{(sB.sigma||0).toFixed(2)}}</td>
-        <td>${{(sB.vmin||0).toFixed(2)}}</td><td>${{(sB.vmax||0).toFixed(2)}}</td>
+        <td>${{(sB.vmin!=null?sB.vmin.toFixed(2):'—')}}</td><td>${{(sB.vmax!=null?sB.vmax.toFixed(2):'—')}}</td>
         <td class="${{dCls}}">${{dStr}}</td>
       </tr>`;
   }});
@@ -6062,18 +6042,25 @@ function renderComparacion(){{
   // Interpretación (para la variable activa en el tab)
   const vAact = _extraerValores(entA, claveTab);
   const vBact = _extraerValores(entB, claveTab);
+  const etiqSensA = sensA === 'EEP' ? 'EEP (San Luis Talpa)' : 'UES (Universitaria)';
+  const etiqSensB = sensB === 'EEP' ? 'EEP (San Luis Talpa)' : 'UES (Universitaria)';
   const sAact = calcStats(vAact);
   const sBact = calcStats(vBact);
   const interp = _interpretarComparacion(sAact, sBact, claveTab);
 
   document.getElementById('comp-result').innerHTML = `
-    <div class="comp-result-title">Resultados de comparativa — <span class="comp-badge-a">Rango A</span> (${{aD}} → ${{aH}}) vs <span class="comp-badge-b">Rango B</span> (${{bD}} → ${{bH}})</div>
+    <div class="comp-result-title">
+      Resultados de comparativa —
+      <span class="comp-badge-a">A: ${{etiqSensA}}</span> (${{aD}} → ${{aH}})
+      vs
+      <span class="comp-badge-b">B: ${{etiqSensB}}</span> (${{bD}} → ${{bH}})
+    </div>
     <div class="comp-table-wrap">
       <table class="comp-table">
         <thead><tr>
           <th>Variable</th>
-          <th colspan="5" style="color:#f87171">Rango A</th>
-          <th colspan="5" style="color:#34d399">Rango B</th>
+          <th colspan="5" style="color:#f87171">Rango A · ${{sensA}}</th>
+          <th colspan="5" style="color:#34d399">Rango B · ${{sensB}}</th>
           <th>Δ Media</th>
         </tr><tr>
           <th></th>
