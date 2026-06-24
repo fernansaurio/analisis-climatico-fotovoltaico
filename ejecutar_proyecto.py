@@ -719,16 +719,26 @@ def exportar_y_generar(df_wl, df_sma, freq_wl, freq_sma):
                                          histograma, boxplot_mensual,
                                          rosa_de_vientos, grafico_pearson,
                                          _serie, log2_manual)
-        import math
+        import math, glob as _glob
         WL_DIR = os.path.join(ROOT, "datos_crudos", "weatherlink")
-        ARCHIVOS_EEP = [
-            os.path.join(WL_DIR, "7GT-EEP_1-1-25_12-00_AM_1_Year_1779324867_v2.csv"),
-            os.path.join(WL_DIR, "7GT-EEP_1-1-26_12-00_AM_1_Year_1779324876_v2.csv"),
-        ]
-        ARCHIVOS_UES = [
-            os.path.join(WL_DIR, "7GT-UES_1-1-25_12-00_AM_1_Year_1779324630_v2.csv"),
-            os.path.join(WL_DIR, "7GT-UES_1-1-26_12-00_AM_1_Year_1779324751_v2.csv"),
-        ]
+        ARCHIVOS_EEP = sorted(
+            f for f in _glob.glob(os.path.join(WL_DIR, "7GT-EEP_*.csv"))
+            if not f.endswith("_clean.csv")
+        )
+        ARCHIVOS_UES = sorted(
+            f for f in _glob.glob(os.path.join(WL_DIR, "7GT-UES_*.csv"))
+            if not f.endswith("_clean.csv")
+        )
+        if not ARCHIVOS_EEP:
+            raise FileNotFoundError(
+                f"No se encontró ningún CSV en: {WL_DIR}\n"
+                "Revisa que los archivos 7GT-EEP_*.csv estén en datos_crudos/weatherlink/"
+            )
+        if not ARCHIVOS_UES:
+            raise FileNotFoundError(
+                f"No se encontró ningún CSV en: {WL_DIR}\n"
+                "Revisa que los archivos 7GT-UES_*.csv estén en datos_crudos/weatherlink/"
+            )
 
         # Intentar cargar desde caché primero
         hash_actual = _hash_archivos(ARCHIVOS_EEP + ARCHIVOS_UES)
