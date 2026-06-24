@@ -1551,6 +1551,10 @@ body::before{{
   transition:.2s;white-space:nowrap}}
 .nav-link:hover{{background:rgba(255,255,255,.08);color:var(--tx);border-color:rgba(255,255,255,.2)}}
 .nav-link.home{{color:var(--blue);border-color:rgba(56,189,248,.3)}}
+.nav-cal-input{{background:rgba(255,255,255,.05);border:1px solid var(--brd);border-radius:7px;
+  color:var(--tx);font-family:var(--r);font-size:.72rem;padding:4px 8px;cursor:pointer;
+  color-scheme:dark;white-space:nowrap}}
+.nav-cal-input:hover{{border-color:var(--yellow)}}
 .nav-link.home:hover{{background:rgba(56,189,248,.1)}}
 
 /* ── Hero header ── */
@@ -1728,6 +1732,9 @@ body::before{{
     <button class="btn-period"        id="p-todo" onclick="setPeriodo('todo')">Todo</button>
   </div>
   <button class="btn-period" id="btn-comparar" onclick="toggleComparacion()" title="Comparar dos rangos">📊 Comparar</button>
+  <div class="nav-sep"></div>
+  <input type="date" class="nav-cal-input" id="nav-cal-input"
+         onchange="irAFecha(this.value)" title="Ir a una fecha específica">
   <div class="nav-links">
     <a class="nav-link home" href="index.html">🏠 Inicio</a>
     <a class="nav-link" href="dashboard_msn_interactivo.html">🌤 Clima</a>
@@ -2001,6 +2008,30 @@ function seleccionarDia(fecha){{
   document.querySelectorAll('.btn-period').forEach(b=>b.classList.remove('active'));
   const pd = document.getElementById('p-dia');
   if(pd) pd.classList.add('active');
+  renderCalendario();
+  actualizarGraficos();
+  actualizarNavLabel();
+}}
+
+// ── Navegación directa por fecha (navbar input) ───────────────────────
+function irAFecha(fechaStr){{
+  if(!fechaStr) return;
+  const parts = fechaStr.split('-').map(Number);
+  if(parts.length !== 3) return;
+  const [y, m] = parts;
+  calMes = `${{y}}-${{String(m).padStart(2,'0')}}`;
+  if(SOLAR.dias[fechaStr]){{
+    diaActivo = fechaStr;
+    periodo = 'dia';
+    document.querySelectorAll('.btn-period').forEach(b=>b.classList.remove('active'));
+    const pd = document.getElementById('p-dia');
+    if(pd) pd.classList.add('active');
+  }} else {{
+    periodo = 'mes';
+    document.querySelectorAll('.btn-period').forEach(b=>b.classList.remove('active'));
+    const pm = document.getElementById('p-mes');
+    if(pm) pm.classList.add('active');
+  }}
   renderCalendario();
   actualizarGraficos();
   actualizarNavLabel();
