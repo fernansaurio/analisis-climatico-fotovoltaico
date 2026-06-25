@@ -2852,115 +2852,136 @@ def _calcular_tendencia_cpp(df_eep: "pd.DataFrame",
     return resultado
 
 
-# ── V.A2: Modelo predictivo con regresión polinomial C++ ─────────────
+# ── V.A2: Modelo predictivo — Suavizado Exponencial de Holt con estacionalidad ──
 
 def _calcular_prediccion_cpp(df_eep: "pd.DataFrame", todas_fechas: list) -> dict:
     """
-    Ajusta un polinomio de grado 3 (C++ regresion_polinomial) sobre
-    (día_del_año → temp_media_diaria) y (día_del_año → solar_media_diaria)
-    y predice los siguientes 30 días desde la última fecha disponible.
-    """
-    import datetime as _dt
+    Suavizado Exponencial Doble de Holt (nivel + tendencia) con índices
+    estacionales mensuales aditivos.
 
-    dt_col = df_eep.columns[0]
+    Algoritmo:
+      1. Medias diarias de temperatura y radiación solar.
+      2. Índices estacionales S[m] = media_mes_m / media_global  (12 valores).
+      3. Desestacionalización: y'(t) = y(t) / S[mes(t)].
+      4. Holt DES:
+           L(t) = α·y'(t) + (1-α)·(L(t-1) + B(t-1))
+           B(t) = β·(L(t) − L(t-1)) + (1-β)·B(t-1)
+      5. Pronóstico h pasos: F(t+h) = (L(N) + h·B(N)) · S[mes(t+h)].
+      6. α y β se optimizan por cuadrícula minimizando RMSE en entrenamiento.
+    """
+    import datetime as _dt, math as _math
+
+    dt_col    = df_eep.columns[0]
     TEMP_COL  = "Temp - °C"
     SOLAR_COL = "Solar Rad - W/m^2"
-    LLUVIA_COL= "Rain - mm"
 
-    # Calcular promedios diarios desde horas agrupadas
-    df_w = df_eep[[dt_col, TEMP_COL, SOLAR_COL, LLUVIA_COL]].copy()
+    # 1. Medias diarias ──────────────────────────────────────────────────
+    df_w = df_eep[[dt_col, TEMP_COL, SOLAR_COL]].copy()
     df_w["_fecha"] = df_w[dt_col].dt.strftime("%Y-%m-%d")
-    df_w["_doy"]   = df_w[dt_col].dt.dayofyear.astype(float)
-
-    for col in [TEMP_COL, SOLAR_COL, LLUVIA_COL]:
+    df_w["_mes"]   = df_w[dt_col].dt.month
+    for col in [TEMP_COL, SOLAR_COL]:
         df_w[col] = pd.to_numeric(df_w[col], errors="coerce")
 
-    # Media y suma diaria usando groupby (pandas, permitido para agrupación)
-    grp = df_w.groupby("_fecha")
-    doys   = {}
-    temps  = {}
-    solars = {}
-    lluvias= {}
-    for fecha, grupo in grp:
-        doys[fecha]    = float(grupo["_doy"].iloc[0])
-        t_list = [v for v in grupo[TEMP_COL].tolist() if v == v]
-        s_list = [v for v in grupo[SOLAR_COL].tolist() if v == v]
-        l_list = [v for v in grupo[LLUVIA_COL].tolist() if v == v]
-        if t_list:  temps[fecha]   = sum(t_list) / len(t_list)
-        if s_list:  solars[fecha]  = sum(s_list) / len(s_list)
-        if l_list:  lluvias[fecha] = sum(l_list)
+    temps, solars, mes_dia = {}, {}, {}
+    for fecha, grupo in df_w.groupby("_fecha"):
+        mes_dia[fecha] = int(grupo["_mes"].iloc[0])
+        t_list = [v for v in grupo[TEMP_COL].tolist() if v == v and v is not None]
+        s_list = [v for v in grupo[SOLAR_COL].tolist() if v == v and v is not None]
+        if t_list: temps[fecha]  = sum(t_list) / len(t_list)
+        if s_list: solars[fecha] = sum(s_list) / len(s_list)
 
     fechas_ord = sorted(f for f in todas_fechas if f in temps)
-    if len(fechas_ord) < 10:
-        return {"error": "Pocos datos para regresión"}
+    if len(fechas_ord) < 20:
+        return {"error": "Pocos datos para suavizado exponencial"}
 
-    xs_t  = np.ascontiguousarray([[doys[f], temps[f]] for f in fechas_ord], dtype=np.float64)
-    xs_s  = np.ascontiguousarray([[doys[f], solars[f]] for f in fechas_ord
-                                   if f in solars], dtype=np.float64)
+    # 2. Índices estacionales mensuales ──────────────────────────────────
+    def _indices(medias, fechas):
+        vals_all = [medias[f] for f in fechas if f in medias]
+        mu = sum(vals_all) / len(vals_all) if vals_all else 1.0
+        sumas = {m: [] for m in range(1, 13)}
+        for f in fechas:
+            if f in medias:
+                sumas[mes_dia[f]].append(medias[f])
+        S = {}
+        for m in range(1, 13):
+            S[m] = (sum(sumas[m]) / len(sumas[m])) / mu if sumas[m] else 1.0
+        total = sum(S.values())
+        for m in S:
+            S[m] = S[m] * 12.0 / total
+        return S, mu
 
-    coef_t, coef_s = None, None
-    try:
-        ac_t = AjusteCurvas()
-        ac_t.establecer_datos(xs_t)
-        coef_t = ac_t.regresion_polinomial(0, 1, 3).tolist()  # [a0,a1,a2,a3]
-    except Exception as e:
-        print(f"    [WARN prediccion temp] {e}")
+    S_t, mu_t = _indices(temps,  fechas_ord)
+    fechas_s   = [f for f in fechas_ord if f in solars]
+    S_s, mu_s  = _indices(solars, fechas_s)
 
-    try:
-        ac_s = AjusteCurvas()
-        ac_s.establecer_datos(xs_s)
-        coef_s = ac_s.regresion_polinomial(0, 1, 3).tolist()
-    except Exception as e:
-        print(f"    [WARN prediccion solar] {e}")
+    # 3. Desestacionalizar ───────────────────────────────────────────────
+    def _desest(medias, fechas, S):
+        return [medias[f] / max(S[mes_dia[f]], 1e-6) for f in fechas if f in medias]
 
-    # Predecir próximos 30 días
+    y_t = _desest(temps,  fechas_ord, S_t)
+    y_s = _desest(solars, fechas_s,   S_s)
+
+    # 4. Suavizado Exponencial Doble de Holt (α,β) ───────────────────────
+    def _holt(serie, alpha, beta):
+        n = len(serie)
+        if n < 2:
+            return serie[-1] if serie else 0.0, 0.0, float('inf')
+        L, B = serie[0], serie[1] - serie[0]
+        err2 = []
+        for i in range(1, n):
+            F = L + B
+            err2.append((F - serie[i]) ** 2)
+            L_new = alpha * serie[i] + (1 - alpha) * F
+            B     = beta  * (L_new - L) + (1 - beta) * B
+            L     = L_new
+        rmse = _math.sqrt(sum(err2) / len(err2)) if err2 else 0.0
+        return L, B, rmse
+
+    def _opt(serie):
+        best = (0.3, 0.1, float('inf'))
+        for a in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8):
+            for b in (0.05, 0.1, 0.15, 0.2, 0.3, 0.4):
+                _, _, r = _holt(serie, a, b)
+                if r < best[2]:
+                    best = (a, b, r)
+        return best
+
+    alpha_t, beta_t, rmse_t_des = _opt(y_t)
+    L_t, B_t, _                 = _holt(y_t, alpha_t, beta_t)
+
+    alpha_s, beta_s, rmse_s_des = _opt(y_s) if len(y_s) >= 2 else (0.3, 0.1, 0.0)
+    L_s, B_s, _                 = _holt(y_s, alpha_s, beta_s) if len(y_s) >= 2 else (mu_s, 0.0, 0.0)
+
+    # RMSE en escala original ≈ RMSE_desest × media_global
+    rmse_t = round(rmse_t_des * mu_t, 4) if mu_t else None
+    rmse_s = round(rmse_s_des * mu_s, 4) if mu_s else None
+
+    # 5. Pronóstico 30 días ──────────────────────────────────────────────
     ultima = _dt.date.fromisoformat(fechas_ord[-1])
     predicciones = []
-    for i in range(1, 31):
-        fd = ultima + _dt.timedelta(days=i)
-        doy = float(fd.timetuple().tm_yday)
-        pred = {"fecha": str(fd), "doy": doy}
-        if coef_t:
-            t = sum(coef_t[j] * (doy ** j) for j in range(4))
-            pred["temp"] = round(max(10.0, min(50.0, t)), 1)
-        if coef_s:
-            s = sum(coef_s[j] * (doy ** j) for j in range(4))
-            pred["solar"] = round(max(0.0, s), 1)
+    for h in range(1, 31):
+        fd  = ultima + _dt.timedelta(days=h)
+        mes = fd.month
+        pred = {"fecha": str(fd), "doy": float(fd.timetuple().tm_yday)}
+        F_t = (L_t + h * B_t) * S_t.get(mes, 1.0)
+        pred["temp"]  = round(max(10.0, min(50.0, F_t)), 1)
+        F_s = (L_s + h * B_s) * S_s.get(mes, 1.0)
+        pred["solar"] = round(max(0.0, F_s), 1)
         predicciones.append(pred)
 
-    # Stats del ajuste: error cuadrático medio C++
-    rmse_t, rmse_s = None, None
-    try:
-        if coef_t:
-            errores = []
-            for f in fechas_ord:
-                doy = doys[f]
-                pred_t = sum(coef_t[j] * (doy ** j) for j in range(4))
-                errores.append((pred_t - temps[f]) ** 2)
-            rmse_t = round(sqrt_nr(sum(errores) / len(errores)), 4)
-    except Exception:
-        pass
-    try:
-        if coef_s:
-            errores_s = []
-            for f in fechas_ord:
-                if f not in solars: continue
-                doy = doys[f]
-                pred_s = sum(coef_s[j] * (doy ** j) for j in range(4))
-                errores_s.append((pred_s - solars[f]) ** 2)
-            rmse_s = round(sqrt_nr(sum(errores_s) / len(errores_s)), 4) if errores_s else None
-    except Exception:
-        pass
-
     return {
-        "tipo":          "polinomial_grado3",
-        "coef_temp":     [round(c, 6) for c in coef_t]  if coef_t  else None,
-        "coef_solar":    [round(c, 6) for c in coef_s]  if coef_s  else None,
+        "tipo":          "holt_winters_estacional",
+        "alpha_temp":    round(alpha_t, 2),
+        "beta_temp":     round(beta_t,  2),
+        "alpha_solar":   round(alpha_s, 2),
+        "beta_solar":    round(beta_s,  2),
         "rmse_temp":     rmse_t,
         "rmse_solar":    rmse_s,
         "n_datos":       len(fechas_ord),
         "ultima_fecha":  str(ultima),
         "predicciones":  predicciones,
+        "S_temp":        {str(m): round(S_t[m], 4) for m in range(1, 13)},
+        "S_solar":       {str(m): round(S_s[m], 4) for m in range(1, 13)},
     }
 
 
@@ -3222,7 +3243,7 @@ def _construir_json_clima(df_eep, df_ues) -> dict:
     tendencia = _calcular_tendencia_cpp(df_eep, df_ues, todas_fechas)
 
     # Modelo predictivo con regresión polinomial C++ grado 3
-    print("    Modelo predictivo (regresión polinomial C++ grado 3)…")
+    print("    Modelo predictivo (Holt-Winters estacional)…")
     prediccion = _calcular_prediccion_cpp(df_eep, todas_fechas)
 
     clima = {
@@ -3518,8 +3539,6 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
 .ct tr:last-child td{{border-bottom:none}}
 
 /* ── uPlot overrides ── */
-.uplot{{width:100%!important}}
-.uplot .u-wrap{{width:100%!important}}
 .u-title{{color:var(--tx2)!important;font-family:var(--r)!important;font-size:.72rem!important}}
 .u-legend{{font-size:.72rem!important;color:var(--tx2)!important}}
 .u-legend .u-value{{color:var(--tx)!important}}
@@ -3880,7 +3899,7 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
 
 <!-- ══ MODELO PREDICTIVO C++ ══ -->
 <div class="sec-head" style="margin-top:40px">
-  Modelo Predictivo — Regresión Polinomial Grado 3 (C++ AjusteCurvas)
+  Modelo Predictivo — Suavizado Exponencial Holt-Winters (nivel + tendencia + estacionalidad)
 </div>
 <div class="acad-card">
   <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px">
@@ -3889,7 +3908,7 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
       <div class="pred-badge-val" id="pred-tipo">—</div>
     </div>
     <div class="pred-badge">
-      <div class="pred-badge-label">N datos entrenamiento</div>
+      <div class="pred-badge-label">N días entrenamiento</div>
       <div class="pred-badge-val" id="pred-n">—</div>
     </div>
     <div class="pred-badge">
@@ -3899,6 +3918,14 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
     <div class="pred-badge">
       <div class="pred-badge-label">RMSE Solar</div>
       <div class="pred-badge-val" id="pred-rmse-s">—</div>
+    </div>
+    <div class="pred-badge">
+      <div class="pred-badge-label">α temp / β temp</div>
+      <div class="pred-badge-val" id="pred-alpha-t">—</div>
+    </div>
+    <div class="pred-badge">
+      <div class="pred-badge-label">α solar / β solar</div>
+      <div class="pred-badge-val" id="pred-alpha-s">—</div>
     </div>
     <div class="pred-badge">
       <div class="pred-badge-label">Última fecha real</div>
@@ -3942,7 +3969,7 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
     </table>
   </div>
   <div style="font-size:.68rem;color:var(--tx3);margin-top:8px">
-    Coeficientes polinomio temperatura:
+    Índices estacionales temperatura (S[mes]):
     <span id="pred-coef-t" style="font-family:var(--mono);color:var(--tx2)">—</span>
   </div>
 </div>
@@ -6295,14 +6322,17 @@ function renderPrediccion(){{
   if(!P || P.error) return;
 
   const set = (id, v) => {{ const el=document.getElementById(id); if(el) el.textContent=v; }};
-  set('pred-tipo',    'Polinomial grado 3 (C++ AjusteCurvas)');
+  set('pred-tipo',    'Holt-Winters (nivel + tendencia + estacionalidad mensual)');
   set('pred-n',       P.n_datos + ' días');
-  set('pred-rmse-t',  P.rmse_temp!=null ? P.rmse_temp.toFixed(4)+' °C' : '—');
-  set('pred-rmse-s',  P.rmse_solar!=null ? P.rmse_solar.toFixed(4)+' W/m²' : '—');
+  set('pred-rmse-t',  P.rmse_temp!=null  ? P.rmse_temp.toFixed(4)+' °C'   : '—');
+  set('pred-rmse-s',  P.rmse_solar!=null ? P.rmse_solar.toFixed(4)+' W/m²': '—');
+  set('pred-alpha-t', P.alpha_temp!=null  ? `α=${{P.alpha_temp}} / β=${{P.beta_temp}}`  : '—');
+  set('pred-alpha-s', P.alpha_solar!=null ? `α=${{P.alpha_solar}} / β=${{P.beta_solar}}`: '—');
   set('pred-ultima',  P.ultima_fecha || '—');
-  if(P.coef_temp){{
-    const cf = P.coef_temp;
-    set('pred-coef-t', `a₀=${{cf[0].toFixed(4)}}  a₁=${{cf[1].toFixed(6)}}  a₂=${{cf[2].toFixed(8)}}  a₃=${{cf[3].toFixed(10)}}`);
+  if(P.S_temp){{
+    const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const st = P.S_temp;
+    set('pred-coef-t', meses.map((_,i)=>`${{meses[i]}}:${{st[i+1]?.toFixed(3)||'—'}}`).join('  '));
   }}
 
   const preds = P.predicciones || [];

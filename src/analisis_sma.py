@@ -1645,8 +1645,7 @@ body::before{{
 .cal-bar-fill{{height:100%;border-radius:2px;background:linear-gradient(90deg,#f59e0b,#10b981);transition:.4s;pointer-events:none}}
 
 /* ── uPlot cards ── */
-.uplot{{width:100%!important}}
-.uplot .u-wrap{{width:100%!important}}
+.uplot-card{{overflow:hidden}}
 .uplot-card{{background:var(--card);border:1px solid var(--brd);border-radius:18px;
   padding:20px 22px;margin-bottom:16px;transition:.2s}}
 .uplot-card:hover{{border-color:rgba(255,255,255,.14)}}
@@ -2466,11 +2465,19 @@ function init(){{
   actualizarGraficos();
   renderStatsGrid();
   actualizarNavLabel();
-  window.addEventListener('resize', () => {{
+  // Redimensionar al ancho real después de layout
+  requestAnimationFrame(() => {{
     const w = chartWidth();
     if(uPac)  uPac.setSize({{width:w, height:220}});
     if(uTemp) uTemp.setSize({{width:w, height:180}});
   }});
+  const _resizeSolar = () => requestAnimationFrame(() => {{
+    const w = chartWidth();
+    if(uPac)  uPac.setSize({{width:w, height:220}});
+    if(uTemp) uTemp.setSize({{width:w, height:180}});
+  }});
+  window.addEventListener('resize', _resizeSolar);
+  new ResizeObserver(_resizeSolar).observe(document.querySelector('.main') || document.body);
 }}
 
 init();
