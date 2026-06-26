@@ -2153,7 +2153,7 @@ function buildUPac(data, w){{
     legend:{{show:true}},
     axes:[
       {{stroke:'#475569',grid:{{stroke:'rgba(255,255,255,.04)'}},ticks:{{stroke:'#475569'}}}},
-      {{scale:'irr',side:0,size:60,stroke:'#f59e0b',label:'Irradiancia (W/m²)',
+      {{scale:'irr',side:3,size:60,stroke:'#f59e0b',label:'Irradiancia (W/m²)',
         grid:{{stroke:'rgba(255,255,255,.04)'}},ticks:{{stroke:'#f59e0b'}}}},
       {{scale:'pac',side:1,size:60,stroke:'#fbbf24',label:labelPac,
         grid:{{show:false}},ticks:{{stroke:'#fbbf24'}}}},
