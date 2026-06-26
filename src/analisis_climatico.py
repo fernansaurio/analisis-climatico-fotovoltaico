@@ -2722,44 +2722,61 @@ _RUMBOS_ORD = ["N","NNE","NE","ENE","E","ESE","SE","SSE",
 
 def _calcular_rosa_datos(df: "pd.DataFrame") -> dict:
     """
-    Calcula frecuencia y velocidad media por rumbo (16 sectores de 22.5°)
-    para la rosa de vientos interactiva en JS Canvas 2D.
-    Sin .mean()/.max() de pandas — implementación manual.
+    Calcula frecuencia por rumbo (16 sectores) con 4 bandas de velocidad apiladas.
+    Usa datos 30-min completos: Avg Wind Speed para bandas normales +
+    High Wind Speed / High Wind Direction para registrar ráfagas extremas.
+    Retorna {rumbo: {b0,b1,b2,b3,total_pct,vel_max}} donde b0=<10, b1=10-20,
+    b2=20-40, b3=≥40 km/h (porcentaje del total de intervalos).
     """
-    col_dir = "Prevailing Wind Dir"
-    col_vel = "Avg Wind Speed - km/h"
+    col_dir  = "Prevailing Wind Dir"
+    col_vel  = "Avg Wind Speed - km/h"
+    col_hspd = "High Wind Speed - km/h"
+    col_hdir = "High Wind Direction"
     if col_dir not in df.columns:
         return {}
 
-    freq   = {r: 0   for r in _RUMBOS_ORD}
-    v_sum  = {r: 0.0 for r in _RUMBOS_ORD}
-    v_cnt  = {r: 0   for r in _RUMBOS_ORD}
-    v_max  = {r: 0.0 for r in _RUMBOS_ORD}
+    bands = {r: {"b0": 0, "b1": 0, "b2": 0, "b3": 0} for r in _RUMBOS_ORD}
+    v_max = {r: 0.0 for r in _RUMBOS_ORD}
 
-    dirs = df[col_dir].tolist()
-    vels = df[col_vel].tolist() if col_vel in df.columns else [0.0]*len(df)
+    dirs  = df[col_dir].tolist()
+    vels  = df[col_vel].tolist()  if col_vel  in df.columns else [0.0] * len(dirs)
+    hspds = df[col_hspd].tolist() if col_hspd in df.columns else [0.0] * len(dirs)
+    hdirs = df[col_hdir].tolist() if col_hdir in df.columns else [None] * len(dirs)
 
-    for dv, vv in zip(dirs, vels):
+    total = 0
+    for dv, vv, hs, hd in zip(dirs, vels, hspds, hdirs):
         if not isinstance(dv, str):
             continue
         r = dv.strip().upper().replace('"', '')
-        if r not in freq:
+        if r not in bands:
             continue
-        freq[r] += 1
-        if vv == vv and vv is not None:
-            fv = float(vv)
-            v_sum[r] += fv
-            v_cnt[r] += 1
-            if fv > v_max[r]:
-                v_max[r] = fv
+        total += 1
+        fv = float(vv) if vv == vv and vv is not None else 0.0
+        if   fv < 10:  bands[r]["b0"] += 1
+        elif fv < 20:  bands[r]["b1"] += 1
+        elif fv < 40:  bands[r]["b2"] += 1
+        else:          bands[r]["b3"] += 1
 
-    total = sum(freq.values()) or 1
+        fh = float(hs) if hs == hs and hs is not None else 0.0
+        if fh > v_max[r]:
+            v_max[r] = fh
+        # Ráfaga extrema en su propia dirección (si difiere de la prevalente)
+        if fh >= 40 and isinstance(hd, str):
+            rh = hd.strip().upper().replace('"', '')
+            if rh in bands and rh != r:
+                bands[rh]["b3"] += 1
+                if fh > v_max[rh]:
+                    v_max[rh] = fh
+
+    total = total or 1
     return {
         r: {
-            "pct":     round(freq[r] / total * 100, 2),
-            "vel_med": round(v_sum[r] / v_cnt[r], 2) if v_cnt[r] > 0 else 0.0,
-            "vel_max": round(v_max[r], 2),
-            "n":       freq[r],
+            "b0":        round(bands[r]["b0"] / total * 100, 2),
+            "b1":        round(bands[r]["b1"] / total * 100, 2),
+            "b2":        round(bands[r]["b2"] / total * 100, 2),
+            "b3":        round(bands[r]["b3"] / total * 100, 2),
+            "total_pct": round(sum(bands[r].values()) / total * 100, 2),
+            "vel_max":   round(v_max[r], 2),
         }
         for r in _RUMBOS_ORD
     }
@@ -5905,9 +5922,12 @@ function iniciarObserverAcad(){{
 }}
 
 // ══ ROSA DE VIENTOS INTERACTIVA (Canvas 2D) ══════════════════════════
+// Bandas de velocidad: b0=<10 km/h, b1=10-20, b2=20-40, b3=≥40 km/h
 
 const _RUMBOS16 = ["N","NNE","NE","ENE","E","ESE","SE","SSE",
                    "S","SSW","SW","WSW","W","WNW","NW","NNW"];
+const _ROSA_BAND_COLORS = ['#38bdf8','#4ade80','#fb923c','#f87171'];
+const _ROSA_BAND_KEYS   = ['b0','b1','b2','b3'];
 
 function dibujarRosaVientos(canvasId, datos, tooltipId) {{
   const cv = document.getElementById(canvasId);
@@ -5917,7 +5937,6 @@ function dibujarRosaVientos(canvasId, datos, tooltipId) {{
   const dpr = window.devicePixelRatio || 1;
   const W = cv.offsetWidth || cv.parentElement?.offsetWidth || 0;
   if(W === 0) {{
-    // Canvas no visible aún — reintentar cuando el layout esté listo
     requestAnimationFrame(() => dibujarRosaVientos(canvasId, datos, tooltipId));
     return;
   }}
@@ -5928,10 +5947,13 @@ function dibujarRosaVientos(canvasId, datos, tooltipId) {{
   ctx.scale(dpr, dpr);
 
   const cx = W/2, cy = H/2;
-  const maxR = Math.min(cx, cy) - 36;
+  const maxR = Math.min(cx, cy) - 40;
 
-  // Máx porcentaje para escalar
-  const maxPct = Math.max(..._RUMBOS16.map(r => datos[r]?.pct || 0), 1);
+  // Detectar formato: nuevo (bandas b0-b3) o legado (pct único)
+  const isNew = datos[_RUMBOS16[0]] && ('b0' in datos[_RUMBOS16[0]]);
+  const maxPct = Math.max(
+    ..._RUMBOS16.map(r => isNew ? (datos[r]?.total_pct || 0) : (datos[r]?.pct || 0)), 1
+  );
 
   // Círculos de referencia
   ctx.strokeStyle = 'rgba(255,255,255,.07)';
@@ -5941,13 +5963,11 @@ function dibujarRosaVientos(canvasId, datos, tooltipId) {{
     ctx.arc(cx, cy, maxR*i/4, 0, Math.PI*2);
     ctx.stroke();
   }}
-  // Etiquetas de %
   ctx.fillStyle = 'rgba(148,163,184,.6)';
   ctx.font = '9px DM Mono, monospace';
   ctx.textAlign = 'center';
   for(let i=1; i<=4; i++) {{
-    const val = (maxPct*i/4).toFixed(1);
-    ctx.fillText(val+'%', cx+4, cy - maxR*i/4 + 3);
+    ctx.fillText((maxPct*i/4).toFixed(1)+'%', cx+4, cy - maxR*i/4 + 3);
   }}
 
   // Ejes cardinales
@@ -5961,99 +5981,122 @@ function dibujarRosaVientos(canvasId, datos, tooltipId) {{
     ctx.stroke();
   }});
 
-  // Sectores
+  // Sectores apilados
   const sectorRad = (Math.PI*2) / 16;
   _RUMBOS16.forEach((rumbo, i) => {{
-    const d = datos[rumbo] || {{pct:0, vel_med:0}};
-    const r = maxR * (d.pct / maxPct);
+    const d = datos[rumbo] || {{}};
     const startAng = -Math.PI/2 + i*sectorRad - sectorRad/2;
     const endAng   = startAng + sectorRad;
-    const vm = d.vel_med;
-    const color = vm < 5  ? '#38bdf8' :
-                  vm < 10 ? '#4ade80' :
-                  vm < 20 ? '#fbbf24' : '#f87171';
 
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, r, startAng, endAng);
-    ctx.closePath();
-    ctx.fillStyle   = color + 'cc';
-    ctx.strokeStyle = color + '55';
-    ctx.lineWidth   = 1;
-    ctx.fill();
-    ctx.stroke();
+    if(isNew) {{
+      // Arcos apilados de dentro hacia afuera, una banda por color
+      let cumR = 0;
+      _ROSA_BAND_KEYS.forEach((bk, bi) => {{
+        const bPct = d[bk] || 0;
+        const bR   = maxR * (bPct / maxPct);
+        if(bR < 0.5) {{ cumR += bR; return; }}
+        const r0 = cumR, r1 = cumR + bR;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r1, startAng, endAng);
+        ctx.arc(cx, cy, r0, endAng, startAng, true);
+        ctx.closePath();
+        ctx.fillStyle   = _ROSA_BAND_COLORS[bi] + 'cc';
+        ctx.strokeStyle = _ROSA_BAND_COLORS[bi] + '44';
+        ctx.lineWidth   = 0.5;
+        ctx.fill();
+        ctx.stroke();
+        cumR = r1;
+      }});
+    }} else {{
+      // Formato legado: sector sólido coloreado por vel_med
+      const r = maxR * ((d.pct||0) / maxPct);
+      const vm = d.vel_med || 0;
+      const color = vm < 10 ? '#38bdf8' : vm < 20 ? '#4ade80' : vm < 40 ? '#fb923c' : '#f87171';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, startAng, endAng);
+      ctx.closePath();
+      ctx.fillStyle   = color + 'cc';
+      ctx.strokeStyle = color + '55';
+      ctx.lineWidth   = 1;
+      ctx.fill();
+      ctx.stroke();
+    }}
   }});
 
-  // Etiquetas N / S / E / W
-  const cardLabels = [['N',0],['E',90],['S',180],['W',270]];
+  // Etiquetas cardinales
   ctx.fillStyle = '#e2e8f0';
   ctx.font = 'bold 11px Outfit, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  cardLabels.forEach(([lbl, deg]) => {{
+  [['N',0],['E',90],['S',180],['W',270]].forEach(([lbl,deg]) => {{
     const rad = deg * Math.PI/180;
-    const lx = cx + Math.sin(rad)*(maxR+20);
-    const ly = cy - Math.cos(rad)*(maxR+20);
-    ctx.fillText(lbl, lx, ly);
+    ctx.fillText(lbl, cx + Math.sin(rad)*(maxR+22), cy - Math.cos(rad)*(maxR+22));
   }});
 
-  // Leyenda velocidad
-  const leg = [['<5','#38bdf8'],['5–10','#4ade80'],['10–20','#fbbf24'],['>20','#f87171']];
+  // Leyenda de 4 bandas
+  const legLabels = ['<10','10-20','20-40','≥40'];
   let lx0 = 6, ly0 = H - 18;
   ctx.font = '9px Outfit, sans-serif';
-  leg.forEach(([lbl,col]) => {{
-    ctx.fillStyle = col+'cc';
+  legLabels.forEach((lbl, bi) => {{
+    ctx.fillStyle = _ROSA_BAND_COLORS[bi] + 'cc';
     ctx.fillRect(lx0, ly0, 10, 10);
     ctx.fillStyle = '#94a3b8';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(lbl+' km/h', lx0+13, ly0+5);
-    lx0 += 72;
+    lx0 += 66;
   }});
 
-  // Punto central
   ctx.beginPath();
   ctx.arc(cx, cy, 3, 0, Math.PI*2);
   ctx.fillStyle = '#e2e8f0';
   ctx.fill();
 
-  // Interactividad: hover para mostrar rumbo bajo el cursor
-  cv._rosaData = datos;
-  cv._rosaCx = cx; cv._rosaCy = cy; cv._rosaMaxR = maxR; cv._rosaMaxPct = maxPct;
-  cv._rosaTip = tipEl;
+  cv._rosaData = datos; cv._rosaCx = cx; cv._rosaCy = cy;
+  cv._rosaMaxR = maxR;  cv._rosaMaxPct = maxPct; cv._rosaTip = tipEl;
+  cv._rosaIsNew = isNew;
+
   cv.onmousemove = function(e) {{
     const rect = cv.getBoundingClientRect();
     const mx = (e.clientX - rect.left) * (W / rect.width);
     const my = (e.clientY - rect.top)  * (H / rect.height);
     const dx = mx - cx, dy = my - cy;
     const dist = Math.sqrt(dx*dx + dy*dy);
-    if(dist < 6 || dist > maxR + 4) {{
-      if(tipEl) tipEl.textContent = '';
-      return;
-    }}
-    // Ángulo desde el norte, sentido horario
+    if(dist < 6 || dist > maxR + 4) {{ if(tipEl) tipEl.textContent=''; return; }}
     let ang = Math.atan2(dx, -dy) * 180/Math.PI;
     if(ang < 0) ang += 360;
     const idx = Math.round(ang / 22.5) % 16;
     const rumbo = _RUMBOS16[idx];
-    const d = datos[rumbo] || {{pct:0, vel_med:0, vel_max:0, n:0}};
-    if(tipEl) tipEl.textContent =
-      `${{rumbo}} — ${{d.pct.toFixed(2)}}% del tiempo · vel.med ${{d.vel_med.toFixed(1)}} km/h · vel.máx ${{d.vel_max.toFixed(1)}} km/h · ${{d.n}} registros`;
-    // Resaltar sector activo
-    dibujarRosaVientos(canvasId, datos, tooltipId);  // redibuja base
-    _resaltarSector(ctx, cx, cy, maxR, maxPct, idx, datos, dpr);
+    const d = datos[rumbo] || {{}};
+    if(tipEl) {{
+      if(isNew) {{
+        const vm = (d.vel_max != null) ? d.vel_max.toFixed(1) : '—';
+        tipEl.textContent = `${{rumbo}} — total ${{(d.total_pct||0).toFixed(1)}}%`
+          + ` · <10: ${{(d.b0||0).toFixed(1)}}%`
+          + ` · 10-20: ${{(d.b1||0).toFixed(1)}}%`
+          + ` · 20-40: ${{(d.b2||0).toFixed(1)}}%`
+          + ` · ≥40: ${{(d.b3||0).toFixed(1)}}%`
+          + ` · ráfaga máx ${{vm}} km/h`;
+      }} else {{
+        tipEl.textContent = `${{rumbo}} — ${{(d.pct||0).toFixed(2)}}% · vel.med ${{(d.vel_med||0).toFixed(1)}} km/h · ráfaga ${{(d.vel_max||0).toFixed(1)}} km/h`;
+      }}
+    }}
+    dibujarRosaVientos(canvasId, datos, tooltipId);
+    _resaltarSector(ctx, cx, cy, maxR, maxPct, idx, datos, dpr, isNew);
   }};
   cv.onmouseleave = function() {{
-    if(tipEl) tipEl.textContent = '';
+    if(tipEl) tipEl.textContent='';
     dibujarRosaVientos(canvasId, datos, tooltipId);
   }};
 }}
 
-function _resaltarSector(ctx, cx, cy, maxR, maxPct, idx, datos, dpr) {{
+function _resaltarSector(ctx, cx, cy, maxR, maxPct, idx, datos, dpr, isNew) {{
   const sectorRad = (Math.PI*2) / 16;
   const rumbo = _RUMBOS16[idx];
-  const d = datos[rumbo] || {{pct:0, vel_med:0}};
-  const r = Math.max(maxR * (d.pct / maxPct), 4);
+  const d = datos[rumbo] || {{}};
+  const totalPct = isNew ? (d.total_pct || 0) : (d.pct || 0);
+  const r = Math.max(maxR * (totalPct / maxPct), 4);
   const startAng = -Math.PI/2 + idx*sectorRad - sectorRad/2;
   const endAng   = startAng + sectorRad;
   ctx.save();
@@ -6067,40 +6110,44 @@ function _resaltarSector(ctx, cx, cy, maxR, maxPct, idx, datos, dpr) {{
   ctx.restore();
 }}
 
-// Calcula rosa de vientos desde los días filtrados actuales (datos diarios de CLIMA.dias)
+// Calcula rosa de vientos (bandas apiladas) desde CLIMA.dias para el período activo
 function calcularRosaLocal(fechas, sensorKey) {{
   const RUMBOS = ["N","NNE","NE","ENE","E","ESE","SE","SSE",
                   "S","SSW","SW","WSW","W","WNW","NW","NNW"];
-  const freq   = {{}};
-  const vSum   = {{}};
-  const vCnt   = {{}};
-  const vMax   = {{}};
-  RUMBOS.forEach(r => {{ freq[r]=0; vSum[r]=0; vCnt[r]=0; vMax[r]=0; }});
+  const bands = {{}};
+  const vMax  = {{}};
+  RUMBOS.forEach(r => {{ bands[r]={{b0:0,b1:0,b2:0,b3:0}}; vMax[r]=0; }});
 
+  let total = 0;
   for(const fecha of fechas) {{
     const d = CLIMA.dias[fecha]?.[sensorKey];
     if(!d) continue;
-    const dir = d.dir_viento;
-    const vel = d.viento;
-    if(dir && RUMBOS.includes(dir)) {{
-      freq[dir]++;
-      if(vel != null && !isNaN(vel)) {{
-        const fv = parseFloat(vel);
-        vSum[dir] += fv;
-        vCnt[dir]++;
-        if(fv > vMax[dir]) vMax[dir] = fv;
-      }}
-    }}
+    const dir    = d.dir_viento;
+    const vel    = d.viento    || 0;  // promedio diario
+    const velMax = d.viento_max || 0; // ráfaga máxima diaria
+    if(!dir || !RUMBOS.includes(dir)) continue;
+    total++;
+    // Si la ráfaga fue extrema (≥40 km/h), asignar siempre a b3 (banda más alta)
+    // Si no, clasificar por velocidad promedio del día
+    if     (velMax >= 40) bands[dir].b3++;
+    else if(vel   < 10)   bands[dir].b0++;
+    else if(vel   < 20)   bands[dir].b1++;
+    else if(vel   < 40)   bands[dir].b2++;
+    else                  bands[dir].b3++;
+    if(velMax > vMax[dir]) vMax[dir] = velMax;
   }}
 
-  const total = RUMBOS.reduce((s,r) => s+freq[r], 0) || 1;
+  total = total || 1;
   const result = {{}};
   RUMBOS.forEach(r => {{
+    const tot_n = bands[r].b0 + bands[r].b1 + bands[r].b2 + bands[r].b3;
     result[r] = {{
-      pct:     Math.round(freq[r] / total * 10000) / 100,
-      vel_med: vCnt[r] > 0 ? Math.round(vSum[r] / vCnt[r] * 100) / 100 : 0,
-      vel_max: Math.round(vMax[r] * 100) / 100,
-      n:       freq[r],
+      b0:        Math.round(bands[r].b0 / total * 10000) / 100,
+      b1:        Math.round(bands[r].b1 / total * 10000) / 100,
+      b2:        Math.round(bands[r].b2 / total * 10000) / 100,
+      b3:        Math.round(bands[r].b3 / total * 10000) / 100,
+      total_pct: Math.round(tot_n       / total * 10000) / 100,
+      vel_max:   vMax[r],
     }};
   }});
   return result;
