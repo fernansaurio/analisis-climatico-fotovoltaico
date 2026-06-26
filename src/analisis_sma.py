@@ -2153,9 +2153,9 @@ function buildUPac(data, w){{
     legend:{{show:true}},
     axes:[
       {{stroke:'#475569',grid:{{stroke:'rgba(255,255,255,.04)'}},ticks:{{stroke:'#475569'}}}},
-      {{scale:'pac',stroke:'#fbbf24',label:labelPac,
+      {{scale:'pac',side:0,size:60,stroke:'#fbbf24',label:labelPac,
         grid:{{stroke:'rgba(255,255,255,.04)'}},ticks:{{stroke:'#fbbf24'}}}},
-      {{scale:'irr',side:1,stroke:'#f59e0b',label:'Irradiancia (W/m²)',
+      {{scale:'irr',side:1,size:60,stroke:'#f59e0b',label:'Irradiancia (W/m²)',
         grid:{{show:false}},ticks:{{stroke:'#f59e0b'}}}},
     ],
     series:[
@@ -2205,6 +2205,12 @@ function actualizarGraficos(){{
   const w      = chartWidth();
   buildUPac(series,  w);
   buildUTemp(series, w);
+  // Ajustar al ancho real tras cualquier reflow del DOM
+  requestAnimationFrame(() => {{
+    const w2 = chartWidth();
+    if(uPac)  uPac.setSize({{width:w2, height:220}});
+    if(uTemp) uTemp.setSize({{width:w2, height:180}});
+  }});
 }}
 
 // ── Zoom ──────────────────────────────────────────────────────────────

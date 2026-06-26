@@ -3823,7 +3823,7 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
 
 <!-- ══ MAPA VIENTO DECORATIVO ══ -->
 <div class="map-card">
-  <div class="map-label">🌍 Vientos atmosféricos en tiempo real — San Salvador (decorativo)</div>
+  <div class="map-label" id="wind-map-label">🌍 Vientos atmosféricos ACTUALES — San Salvador</div>
   <iframe
     src="https://earth.nullschool.net/#current/wind/surface/level/orthographic=-89.2,13.7,3000/loc=-89.193,13.692"
     loading="lazy" title="Mapa de vientos earth.nullschool.net"
@@ -6026,8 +6026,15 @@ function setPeriodo(p){{
 function setTab(t){{
   const sy = window.scrollY;
   tabActiva = t;
-  document.querySelectorAll('.btn-tab').forEach(b=>b.classList.remove('active'));
+  // Limpiar solo tabs de navegación (no los botones de variable académica av-*)
+  document.querySelectorAll('[id^="tab-"]').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+t).classList.add('active');
+  // Sincronizar variable académica con el tab activo
+  const _tabMap = {{general:'temp',hum:'hum',lluvia:'lluvia',viento:'viento',presion:'presion'}};
+  acadVar = _tabMap[t] || 'temp';
+  document.querySelectorAll('[id^="av-"]').forEach(b=>b.classList.remove('active'));
+  const avBtn = document.getElementById('av-'+acadVar);
+  if(avBtn) avBtn.classList.add('active');
   actualizarTodoDebounced(sy);
 }}
 
@@ -6443,6 +6450,18 @@ function syncNavDateInput(){{
 // ── Arranque ──
 init();
 iniciarObserverAcad();
+
+// ── Título dinámico del mapa de vientos ──
+(function(){{
+  const el = document.getElementById('wind-map-label');
+  if(!el) return;
+  const now  = new Date();
+  const fOpts = {{weekday:'long', year:'numeric', month:'long', day:'numeric'}};
+  const hOpts = {{hour:'2-digit', minute:'2-digit', hour12:false}};
+  const fecha = now.toLocaleDateString('es-SV', fOpts);
+  const hora  = now.toLocaleTimeString('es-SV', hOpts);
+  el.textContent = `🌍 Mapa de vientos ACTUAL — San Salvador · ${{fecha}} · ${{hora}} h`;
+}})();
 
 /* ══ FOOTER AUTORES ══════════════════════════════════════════════════ */
 (function insertarFooter(){{
