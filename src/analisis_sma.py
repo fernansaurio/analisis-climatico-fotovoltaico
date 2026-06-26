@@ -2109,9 +2109,9 @@ function getDatosPeriodo(){{
 
 // ── uPlot ─────────────────────────────────────────────────────────────
 function tsToSec(tStr, fecha){{
-  // tStr = "HH:MM", fecha = "YYYY-MM-DD"
-  const [h,m] = tStr.split(':').map(Number);
-  return Date.UTC(+fecha.slice(0,4),+fecha.slice(5,7)-1,+fecha.slice(8,10),h,m)/1000;
+  // Los timestamps de SMA están en hora local — usar Date() sin UTC
+  // para que el navegador interprete como hora local y no desplace 6 h.
+  return new Date(fecha + 'T' + tStr + ':00').getTime() / 1000;
 }}
 
 function construirSeriesUplot(datos){{
@@ -2119,7 +2119,8 @@ function construirSeriesUplot(datos){{
   const isDiario = datos._diario;
   let xs;
   if(isDiario){{
-    xs = datos.ts.map(d => Date.UTC(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10))/1000);
+    // Usar mediodía local para que la etiqueta de fecha no caiga en día anterior
+    xs = datos.ts.map(d => new Date(d + 'T12:00:00').getTime() / 1000);
   }} else {{
     xs = datos.ts.map(t => tsToSec(t, diaActivo));
   }}

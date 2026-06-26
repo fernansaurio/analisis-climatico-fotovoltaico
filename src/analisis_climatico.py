@@ -2852,24 +2852,28 @@ def _calcular_tendencia_cpp(df_eep: "pd.DataFrame",
     return resultado
 
 
-# ── V.A2: Modelo predictivo — Suavizado Exponencial de Holt con estacionalidad ──
+# ── V.A2: Modelo predictivo — LSTM implementado en NumPy ─────────────
 
 def _calcular_prediccion_cpp(df_eep: "pd.DataFrame", todas_fechas: list) -> dict:
     """
-    Suavizado Exponencial Doble de Holt (nivel + tendencia) con índices
-    estacionales mensuales aditivos.
+    LSTM (Long Short-Term Memory) implementado en NumPy puro.
 
-    Algoritmo:
-      1. Medias diarias de temperatura y radiación solar.
-      2. Índices estacionales S[m] = media_mes_m / media_global  (12 valores).
-      3. Desestacionalización: y'(t) = y(t) / S[mes(t)].
-      4. Holt DES:
-           L(t) = α·y'(t) + (1-α)·(L(t-1) + B(t-1))
-           B(t) = β·(L(t) − L(t-1)) + (1-β)·B(t-1)
-      5. Pronóstico h pasos: F(t+h) = (L(N) + h·B(N)) · S[mes(t+h)].
-      6. α y β se optimizan por cuadrícula minimizando RMSE en entrenamiento.
+    Arquitectura:
+      - Entrada   : ventana de SEQ_LEN=14 días (temperatura, radiación solar)
+      - LSTM      : 1 capa, HIDDEN_DIM=32 unidades
+                    compuertas forget/input/candidate/output concatenadas
+      - Salida    : capa lineal (2 unidades: temp, solar)
+      - Entrenamiento: BPTT completa + Adam (lr=0.005, β₁=0.9, β₂=0.999)
+      - Épocas    : 120 con orden aleatorio de secuencias
+    Pronóstico: rolling 30 días (cada predicción alimenta la siguiente ventana).
     """
-    import datetime as _dt, math as _math
+    import datetime as _dt
+
+    INPUT_DIM  = 2
+    HIDDEN_DIM = 32
+    SEQ_LEN    = 14
+    EPOCHS     = 120
+    LR         = 0.005
 
     dt_col    = df_eep.columns[0]
     TEMP_COL  = "Temp - °C"
@@ -2878,110 +2882,164 @@ def _calcular_prediccion_cpp(df_eep: "pd.DataFrame", todas_fechas: list) -> dict
     # 1. Medias diarias ──────────────────────────────────────────────────
     df_w = df_eep[[dt_col, TEMP_COL, SOLAR_COL]].copy()
     df_w["_fecha"] = df_w[dt_col].dt.strftime("%Y-%m-%d")
-    df_w["_mes"]   = df_w[dt_col].dt.month
     for col in [TEMP_COL, SOLAR_COL]:
         df_w[col] = pd.to_numeric(df_w[col], errors="coerce")
 
-    temps, solars, mes_dia = {}, {}, {}
+    temps, solars = {}, {}
     for fecha, grupo in df_w.groupby("_fecha"):
-        mes_dia[fecha] = int(grupo["_mes"].iloc[0])
         t_list = [v for v in grupo[TEMP_COL].tolist() if v == v and v is not None]
         s_list = [v for v in grupo[SOLAR_COL].tolist() if v == v and v is not None]
         if t_list: temps[fecha]  = sum(t_list) / len(t_list)
         if s_list: solars[fecha] = sum(s_list) / len(s_list)
 
-    fechas_ord = sorted(f for f in todas_fechas if f in temps)
-    if len(fechas_ord) < 20:
-        return {"error": "Pocos datos para suavizado exponencial"}
+    fechas_ord = sorted(f for f in todas_fechas if f in temps and f in solars)
+    if len(fechas_ord) < SEQ_LEN + 2:
+        return {"error": "Pocos datos para LSTM"}
 
-    # 2. Índices estacionales mensuales ──────────────────────────────────
-    def _indices(medias, fechas):
-        vals_all = [medias[f] for f in fechas if f in medias]
-        mu = sum(vals_all) / len(vals_all) if vals_all else 1.0
-        sumas = {m: [] for m in range(1, 13)}
-        for f in fechas:
-            if f in medias:
-                sumas[mes_dia[f]].append(medias[f])
-        S = {}
-        for m in range(1, 13):
-            S[m] = (sum(sumas[m]) / len(sumas[m])) / mu if sumas[m] else 1.0
-        total = sum(S.values())
-        for m in S:
-            S[m] = S[m] * 12.0 / total
-        return S, mu
+    T_ser = np.array([temps[f]  for f in fechas_ord])
+    S_ser = np.array([solars[f] for f in fechas_ord])
 
-    S_t, mu_t = _indices(temps,  fechas_ord)
-    fechas_s   = [f for f in fechas_ord if f in solars]
-    S_s, mu_s  = _indices(solars, fechas_s)
+    # 2. Normalización min-max → [0, 1] ──────────────────────────────────
+    T_min, T_max = T_ser.min(), T_ser.max()
+    S_min, S_max = S_ser.min(), S_ser.max()
+    T_rng = max(float(T_max - T_min), 1e-6)
+    S_rng = max(float(S_max - S_min), 1e-6)
+    T_norm = (T_ser - T_min) / T_rng
+    S_norm = (S_ser - S_min) / S_rng
+    serie  = np.column_stack([T_norm, S_norm]).astype(np.float64)  # (N, 2)
 
-    # 3. Desestacionalizar ───────────────────────────────────────────────
-    def _desest(medias, fechas, S):
-        return [medias[f] / max(S[mes_dia[f]], 1e-6) for f in fechas if f in medias]
+    # 3. Pesos LSTM (4 compuertas concatenadas: f·i·g·o) ──────────────────
+    np.random.seed(42)
+    H      = HIDDEN_DIM
+    cdim   = INPUT_DIM + H
 
-    y_t = _desest(temps,  fechas_ord, S_t)
-    y_s = _desest(solars, fechas_s,   S_s)
+    def _xavier(out, inp):
+        return np.random.randn(out, inp) * np.sqrt(2.0 / (inp + out))
 
-    # 4. Suavizado Exponencial Doble de Holt (α,β) ───────────────────────
-    def _holt(serie, alpha, beta):
-        n = len(serie)
-        if n < 2:
-            return serie[-1] if serie else 0.0, 0.0, float('inf')
-        L, B = serie[0], serie[1] - serie[0]
-        err2 = []
-        for i in range(1, n):
-            F = L + B
-            err2.append((F - serie[i]) ** 2)
-            L_new = alpha * serie[i] + (1 - alpha) * F
-            B     = beta  * (L_new - L) + (1 - beta) * B
-            L     = L_new
-        rmse = _math.sqrt(sum(err2) / len(err2)) if err2 else 0.0
-        return L, B, rmse
+    params = {
+        'W':  _xavier(4 * H, cdim),
+        'b':  np.zeros(4 * H),
+        'Wy': _xavier(INPUT_DIM, H),
+        'by': np.zeros(INPUT_DIM),
+    }
+    am = {k: np.zeros_like(v) for k, v in params.items()}
+    av = {k: np.zeros_like(v) for k, v in params.items()}
+    at = [0]
 
-    def _opt(serie):
-        best = (0.3, 0.1, float('inf'))
-        for a in (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8):
-            for b in (0.05, 0.1, 0.15, 0.2, 0.3, 0.4):
-                _, _, r = _holt(serie, a, b)
-                if r < best[2]:
-                    best = (a, b, r)
-        return best
+    def _adam(key, grad):
+        at[0] += 1; t = at[0]; b1, b2, eps = 0.9, 0.999, 1e-8
+        am[key] = b1 * am[key] + (1 - b1) * grad
+        av[key] = b2 * av[key] + (1 - b2) * grad ** 2
+        mh = am[key] / (1 - b1 ** t)
+        vh = av[key] / (1 - b2 ** t)
+        params[key] -= LR * mh / (np.sqrt(vh) + eps)
 
-    alpha_t, beta_t, rmse_t_des = _opt(y_t)
-    L_t, B_t, _                 = _holt(y_t, alpha_t, beta_t)
+    def _sig(x):  return 1.0 / (1.0 + np.exp(-np.clip(x, -15, 15)))
+    def _tanh(x): return np.tanh(np.clip(x, -15, 15))
 
-    alpha_s, beta_s, rmse_s_des = _opt(y_s) if len(y_s) >= 2 else (0.3, 0.1, 0.0)
-    L_s, B_s, _                 = _holt(y_s, alpha_s, beta_s) if len(y_s) >= 2 else (mu_s, 0.0, 0.0)
+    # 4. Forward pass (una secuencia) ─────────────────────────────────────
+    def _fwd(Xs):
+        T = len(Xs)
+        h = np.zeros(H); c = np.zeros(H)
+        cache = []; ys = []
+        W = params['W']; b = params['b']
+        Wy = params['Wy']; by = params['by']
+        for t in range(T):
+            xh  = np.concatenate([Xs[t], h])
+            raw = W @ xh + b
+            f   = _sig(raw[:H]); i_ = _sig(raw[H:2*H])
+            g   = _tanh(raw[2*H:3*H]); o = _sig(raw[3*H:])
+            cn  = f * c + i_ * g
+            hn  = o * _tanh(cn)
+            ys.append((Wy @ hn + by).copy())
+            cache.append((xh.copy(), f, i_, g, o, c.copy(), cn.copy(), hn.copy()))
+            h, c = hn, cn
+        return np.array(ys), cache
 
-    # RMSE en escala original ≈ RMSE_desest × media_global
-    rmse_t = round(rmse_t_des * mu_t, 4) if mu_t else None
-    rmse_s = round(rmse_s_des * mu_s, 4) if mu_s else None
+    # 5. BPTT (backpropagation through time) ──────────────────────────────
+    def _bwd(Xs, tgt, cache):
+        T = len(cache)
+        dW  = np.zeros_like(params['W']);  db  = np.zeros_like(params['b'])
+        dWy = np.zeros_like(params['Wy']); dby = np.zeros_like(params['by'])
+        dh_next = np.zeros(H); dc_next = np.zeros(H)
+        total_loss = 0.0
+        for t in reversed(range(T)):
+            xh, f, i_, g, o, c_prev, c, h = cache[t]
+            dy = params['Wy'] @ h + params['by'] - tgt[t]
+            total_loss += 0.5 * float(np.dot(dy, dy))
+            dWy += np.outer(dy, h); dby += dy
+            dh  = params['Wy'].T @ dy + dh_next
+            tc  = _tanh(c)
+            do  = dh * tc
+            dc  = dh * o * (1.0 - tc ** 2) + dc_next
+            df  = dc * c_prev; di_ = dc * g; dg = dc * i_; dc2 = dc * f
+            dr  = np.concatenate([df * f * (1-f), di_ * i_ * (1-i_),
+                                   dg * (1-g**2),  do * o * (1-o)])
+            dW += np.outer(dr, xh); db += dr
+            dxh = params['W'].T @ dr
+            dh_next = dxh[INPUT_DIM:]; dc_next = dc2
+        return dW, db, dWy, dby, total_loss / T
 
-    # 5. Pronóstico 30 días ──────────────────────────────────────────────
-    ultima = _dt.date.fromisoformat(fechas_ord[-1])
+    # 6. Secuencias de entrenamiento (one-step-ahead) ─────────────────────
+    N   = len(serie)
+    Xs  = [serie[i      : i + SEQ_LEN]     for i in range(N - SEQ_LEN)]
+    ys  = [serie[i + 1  : i + SEQ_LEN + 1] for i in range(N - SEQ_LEN)]
+    M   = len(Xs)
+
+    # 7. Entrenamiento ────────────────────────────────────────────────────
+    for epoch in range(EPOCHS):
+        idx = np.random.permutation(M)
+        tl  = 0.0
+        for j in idx:
+            Y, cache = _fwd(Xs[j])
+            dW, db, dWy, dby, loss = _bwd(Xs[j], ys[j], cache)
+            tl += loss
+            _adam('W', dW); _adam('b', db); _adam('Wy', dWy); _adam('by', dby)
+        if epoch % 30 == 0:
+            print(f"    [LSTM] época {epoch:3d}/{EPOCHS}  loss={tl/M:.5f}")
+    print(f"    [LSTM] entrenamiento completo. loss final={tl/M:.5f}")
+
+    # 8. RMSE sobre conjunto de entrenamiento ─────────────────────────────
+    errs_t, errs_s = [], []
+    for j in range(M):
+        Y, _ = _fwd(Xs[j])
+        pred_last = Y[-1]
+        T_pred = float(pred_last[0]) * T_rng + T_min
+        S_pred = float(pred_last[1]) * S_rng + S_min
+        errs_t.append((T_pred - T_ser[j + SEQ_LEN]) ** 2)
+        errs_s.append((S_pred - S_ser[j + SEQ_LEN]) ** 2)
+    rmse_t = round(float(np.sqrt(np.mean(errs_t))), 4)
+    rmse_s = round(float(np.sqrt(np.mean(errs_s))), 4)
+
+    # 9. Rolling forecast 30 días ─────────────────────────────────────────
+    ultima   = _dt.date.fromisoformat(fechas_ord[-1])
+    ventana  = serie[-SEQ_LEN:].copy()
     predicciones = []
-    for h in range(1, 31):
-        fd  = ultima + _dt.timedelta(days=h)
-        mes = fd.month
-        pred = {"fecha": str(fd), "doy": float(fd.timetuple().tm_yday)}
-        F_t = (L_t + h * B_t) * S_t.get(mes, 1.0)
-        pred["temp"]  = round(max(10.0, min(50.0, F_t)), 1)
-        F_s = (L_s + h * B_s) * S_s.get(mes, 1.0)
-        pred["solar"] = round(max(0.0, F_s), 1)
-        predicciones.append(pred)
+    for step in range(1, 31):
+        fd = ultima + _dt.timedelta(days=step)
+        Y, _  = _fwd(ventana)
+        nxt   = Y[-1].copy()
+        T_pred = float(nxt[0]) * T_rng + T_min
+        S_pred = float(nxt[1]) * S_rng + S_min
+        predicciones.append({
+            "fecha":  str(fd),
+            "doy":    float(fd.timetuple().tm_yday),
+            "temp":   round(max(10.0, min(50.0, T_pred)), 1),
+            "solar":  round(max(0.0, S_pred), 1),
+        })
+        ventana = np.roll(ventana, -1, axis=0)
+        ventana[-1] = nxt
 
     return {
-        "tipo":          "holt_winters_estacional",
-        "alpha_temp":    round(alpha_t, 2),
-        "beta_temp":     round(beta_t,  2),
-        "alpha_solar":   round(alpha_s, 2),
-        "beta_solar":    round(beta_s,  2),
-        "rmse_temp":     rmse_t,
-        "rmse_solar":    rmse_s,
-        "n_datos":       len(fechas_ord),
-        "ultima_fecha":  str(ultima),
-        "predicciones":  predicciones,
-        "S_temp":        {str(m): round(S_t[m], 4) for m in range(1, 13)},
-        "S_solar":       {str(m): round(S_s[m], 4) for m in range(1, 13)},
+        "tipo":         "lstm_numpy",
+        "hidden_dim":   HIDDEN_DIM,
+        "seq_len":      SEQ_LEN,
+        "epochs":       EPOCHS,
+        "rmse_temp":    rmse_t,
+        "rmse_solar":   rmse_s,
+        "n_datos":      len(fechas_ord),
+        "ultima_fecha": str(ultima),
+        "predicciones": predicciones,
     }
 
 
@@ -3243,7 +3301,7 @@ def _construir_json_clima(df_eep, df_ues) -> dict:
     tendencia = _calcular_tendencia_cpp(df_eep, df_ues, todas_fechas)
 
     # Modelo predictivo con regresión polinomial C++ grado 3
-    print("    Modelo predictivo (Holt-Winters estacional)…")
+    print("    Modelo predictivo (LSTM NumPy, 120 épocas)…")
     prediccion = _calcular_prediccion_cpp(df_eep, todas_fechas)
 
     clima = {
@@ -3899,7 +3957,7 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
 
 <!-- ══ MODELO PREDICTIVO C++ ══ -->
 <div class="sec-head" style="margin-top:40px">
-  Modelo Predictivo — Suavizado Exponencial Holt-Winters (nivel + tendencia + estacionalidad)
+  Modelo Predictivo — LSTM (Long Short-Term Memory, NumPy)
 </div>
 <div class="acad-card">
   <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px">
@@ -3912,20 +3970,20 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
       <div class="pred-badge-val" id="pred-n">—</div>
     </div>
     <div class="pred-badge">
+      <div class="pred-badge-label">Hidden / Seq len</div>
+      <div class="pred-badge-val" id="pred-arch">—</div>
+    </div>
+    <div class="pred-badge">
+      <div class="pred-badge-label">Épocas</div>
+      <div class="pred-badge-val" id="pred-epochs">—</div>
+    </div>
+    <div class="pred-badge">
       <div class="pred-badge-label">RMSE Temperatura</div>
       <div class="pred-badge-val" id="pred-rmse-t">—</div>
     </div>
     <div class="pred-badge">
       <div class="pred-badge-label">RMSE Solar</div>
       <div class="pred-badge-val" id="pred-rmse-s">—</div>
-    </div>
-    <div class="pred-badge">
-      <div class="pred-badge-label">α temp / β temp</div>
-      <div class="pred-badge-val" id="pred-alpha-t">—</div>
-    </div>
-    <div class="pred-badge">
-      <div class="pred-badge-label">α solar / β solar</div>
-      <div class="pred-badge-val" id="pred-alpha-s">—</div>
     </div>
     <div class="pred-badge">
       <div class="pred-badge-label">Última fecha real</div>
@@ -5273,8 +5331,8 @@ function actualizarGraficosAcad(datos){{
     }}
   }}
 
-  // ── 6) MAPA DE CALOR POR HORA ──────────────────────────────────────
-  try {{ dibujarHeatmap(datos, clave, unit, c1); }} catch(e) {{}}
+  // ── 6) MAPA DE CALOR POR HORA — siempre temperatura ───────────────
+  try {{ dibujarHeatmap(datos, 'temp', '°C', C.temp); }} catch(e) {{}}
 
   // ── 7) TENDENCIA LINEAL C++ ─────────────────────────────────────────
   try {{ renderTendencia(datos, clave, color, unit); }} catch(e) {{}}
@@ -5987,20 +6045,22 @@ function actualizarTodoSinScroll(){{
   requestAnimationFrame(()=>window.scrollTo({{top: sy, behavior:'instant'}}));
 }}
 
-// ── Actualizar todo: sección académica solo si es visible ─────────────
+// ── Actualizar todo: stats siempre en sincronía con el sensor/período ──
 function actualizarTodo(){{
   const sy = _debounceSy || window.scrollY;
   const datos = obtenerDatos();
   actualizarGrafico(datos);
   actualizarWidgets(datos);
   actualizarNavLabel();
-  // Sección académica: diferir si no es visible
+  // Sección académica: siempre actualizar para que los estadísticos
+  // reflejen el sensor/período actual de la barra superior.
+  _acadCargado    = true;
+  _acadPendiente  = false;
   if(_acadVisible){{
-    _acadCargado = true;
-    _acadPendiente = false;
     actualizarGraficosAcad(datos);
   }} else {{
-    // Marcar pendiente — se dibujará cuando entre en viewport
+    // Diferir el render pesado (Chart.js) hasta que sea visible,
+    // pero cuando entre al viewport se usarán los datos actuales.
     _acadPendiente = true;
   }}
   // Restaurar scroll después de re-render de uPlot
@@ -6322,18 +6382,14 @@ function renderPrediccion(){{
   if(!P || P.error) return;
 
   const set = (id, v) => {{ const el=document.getElementById(id); if(el) el.textContent=v; }};
-  set('pred-tipo',    'Holt-Winters (nivel + tendencia + estacionalidad mensual)');
+  set('pred-tipo',    'LSTM — Long Short-Term Memory (NumPy, BPTT + Adam)');
   set('pred-n',       P.n_datos + ' días');
+  set('pred-arch',    `H=${{P.hidden_dim||32}}  seq=${{P.seq_len||14}}`);
+  set('pred-epochs',  (P.epochs||120) + ' épocas');
   set('pred-rmse-t',  P.rmse_temp!=null  ? P.rmse_temp.toFixed(4)+' °C'   : '—');
   set('pred-rmse-s',  P.rmse_solar!=null ? P.rmse_solar.toFixed(4)+' W/m²': '—');
-  set('pred-alpha-t', P.alpha_temp!=null  ? `α=${{P.alpha_temp}} / β=${{P.beta_temp}}`  : '—');
-  set('pred-alpha-s', P.alpha_solar!=null ? `α=${{P.alpha_solar}} / β=${{P.beta_solar}}`: '—');
   set('pred-ultima',  P.ultima_fecha || '—');
-  if(P.S_temp){{
-    const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-    const st = P.S_temp;
-    set('pred-coef-t', meses.map((_,i)=>`${{meses[i]}}:${{st[i+1]?.toFixed(3)||'—'}}`).join('  '));
-  }}
+  set('pred-coef-t',  `Parámetros: INPUT_DIM=2 · HIDDEN=32 · SEQ_LEN=14 · lr=0.005`);
 
   const preds = P.predicciones || [];
   if(!preds.length) return;
