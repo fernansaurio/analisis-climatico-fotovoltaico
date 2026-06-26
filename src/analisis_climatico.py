@@ -3577,7 +3577,9 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
 .map-card{{background:var(--card);border:1px solid var(--brd);border-radius:18px;
   overflow:hidden;margin-top:20px}}
 .map-card iframe{{width:100%;height:380px;border:none;display:block}}
-.map-label{{padding:14px 20px;font-size:.72rem;color:var(--tx2)}}
+.map-label{{padding:16px 22px;font-size:.95rem;font-weight:700;color:var(--tx);
+  letter-spacing:.02em;display:flex;align-items:center;gap:8px;
+  border-bottom:1px solid var(--brd)}}
 
 /* ── Sección académica ── */
 .sec-head{{display:flex;align-items:center;gap:12px;font-size:.68rem;
@@ -3942,6 +3944,78 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
     </tr></thead>
     <tbody id="extremos-tbody"></tbody>
   </table>
+</div>
+
+<!-- ══ FILTRO DE RANGOS ══ -->
+<div class="sec-head">Búsqueda por Rangos — Filtro de Condiciones Climáticas</div>
+<div class="acad-card" style="margin-bottom:16px">
+  <div style="display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;margin-bottom:16px">
+
+    <div style="display:flex;flex-direction:column;gap:4px;min-width:120px">
+      <label style="font-size:.65rem;color:var(--tx3);letter-spacing:1px">SENSOR</label>
+      <select id="fr-sensor" style="background:var(--card2);border:1px solid var(--brd);color:var(--tx);
+        border-radius:8px;padding:6px 10px;font-size:.8rem;cursor:pointer">
+        <option value="EEP">EEP</option>
+        <option value="UES">UES</option>
+      </select>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:.65rem;color:var(--tx3);letter-spacing:1px">TEMPERATURA MEDIA (°C)</label>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="number" id="fr-t-min" placeholder="Mín" step="0.5"
+          style="width:70px;background:var(--card2);border:1px solid var(--brd);color:var(--tx);
+            border-radius:8px;padding:6px 8px;font-size:.82rem">
+        <span style="color:var(--tx3);font-size:.8rem">—</span>
+        <input type="number" id="fr-t-max" placeholder="Máx" step="0.5"
+          style="width:70px;background:var(--card2);border:1px solid var(--brd);color:var(--tx);
+            border-radius:8px;padding:6px 8px;font-size:.82rem">
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:.65rem;color:var(--tx3);letter-spacing:1px">LLUVIA ≥ (mm/día)</label>
+      <input type="number" id="fr-lluvia" placeholder="ej. 20" min="0" step="1"
+        style="width:90px;background:var(--card2);border:1px solid var(--brd);color:var(--tx);
+          border-radius:8px;padding:6px 8px;font-size:.82rem">
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:.65rem;color:var(--tx3);letter-spacing:1px">RÁFAGA ≥ (km/h)</label>
+      <input type="number" id="fr-viento" placeholder="ej. 40" min="0" step="1"
+        style="width:90px;background:var(--card2);border:1px solid var(--brd);color:var(--tx);
+          border-radius:8px;padding:6px 8px;font-size:.82rem">
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:.65rem;color:var(--tx3);letter-spacing:1px">HUMEDAD (%) MIN</label>
+      <input type="number" id="fr-hum-min" placeholder="ej. 80" min="0" max="100" step="1"
+        style="width:80px;background:var(--card2);border:1px solid var(--brd);color:var(--tx);
+          border-radius:8px;padding:6px 8px;font-size:.82rem">
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:.65rem;color:var(--tx3);letter-spacing:1px">PRESIÓN ≤ (mb)</label>
+      <input type="number" id="fr-pres" placeholder="ej. 1010" step="0.5"
+        style="width:90px;background:var(--card2);border:1px solid var(--brd);color:var(--tx);
+          border-radius:8px;padding:6px 8px;font-size:.82rem">
+    </div>
+
+    <div style="display:flex;gap:8px;align-self:flex-end">
+      <button onclick="aplicarFiltroRangos()" style="background:rgba(56,189,248,.15);
+        border:1px solid rgba(56,189,248,.5);color:var(--blue);border-radius:8px;
+        padding:7px 16px;cursor:pointer;font-size:.82rem;font-weight:600;transition:.2s">
+        🔍 Buscar
+      </button>
+      <button onclick="limpiarFiltroRangos()" style="background:rgba(255,255,255,.05);
+        border:1px solid var(--brd);color:var(--tx2);border-radius:8px;
+        padding:7px 12px;cursor:pointer;font-size:.82rem;transition:.2s">
+        ✕ Limpiar
+      </button>
+    </div>
+  </div>
+
+  <div id="fr-resultado" style="margin-top:8px"></div>
 </div>
 
 <!-- Correlación de Pearson -->
@@ -5532,13 +5606,19 @@ function renderTablaMensual(){{
 // ══ EVENTOS EXTREMOS ═════════════════════════════════════════════════
 
 function renderEventosExtremos(datos){{
+  // Umbrales calibrados para el clima de San Salvador (tropical seco, 500-700 msnm)
+  // T normal: 22-32°C · Lluvia torrencial estación lluviosa: >20 mm/día
+  // Ráfagas > 40 km/h son notables; > 50 km/h raras (como Feb 2026)
   const UMBRALES = [
-    {{alias:'temp',  label:'Ola de calor',   cond:v=>v>=33,  desc:'Temperatura ≥ 33°C', icon:'🌡🔴', color:'#f87171'}},
-    {{alias:'temp',  label:'Frío inusual',   cond:v=>v<=18,  desc:'Temperatura ≤ 18°C', icon:'❄️',   color:'#60a5fa'}},
-    {{alias:'lluvia',label:'Lluvia intensa', cond:v=>v>=5,   desc:'Precipitación ≥ 5 mm',icon:'🌧🔵',color:'#60a5fa'}},
-    {{alias:'solar', label:'Solar máxima',   cond:v=>v>=800, desc:'Radiación ≥ 800 W/m²',icon:'☀🟡',color:'#fbbf24'}},
-    {{alias:'viento',label:'Viento fuerte',  cond:v=>v>=25,  desc:'Viento ≥ 25 km/h',  icon:'💨⚪', color:'#a78bfa'}},
-    {{alias:'presion',label:'Presión baja',  cond:v=>v<=1008,desc:'Presión ≤ 1008 mb',  icon:'🧭⬇', color:'#fbbf24'}},
+    {{alias:'temp_max',  label:'Calor extremo',    cond:v=>v>=35,  desc:'T máx ≥ 35 °C',      icon:'🌡🔴', color:'#f87171'}},
+    {{alias:'temp',      label:'Día muy caluroso', cond:v=>v>=30,  desc:'T media ≥ 30 °C',    icon:'🌡🟠', color:'#fb923c'}},
+    {{alias:'temp_min',  label:'Noche fresca',     cond:v=>v<=20,  desc:'T mín ≤ 20 °C',      icon:'❄️',   color:'#60a5fa'}},
+    {{alias:'lluvia',    label:'Lluvia fuerte',    cond:v=>v>=20,  desc:'Precipitación ≥ 20 mm',icon:'🌧🔵',color:'#38bdf8'}},
+    {{alias:'lluvia',    label:'Lluvia torrencial',cond:v=>v>=50,  desc:'Precipitación ≥ 50 mm',icon:'⛈🔵',color:'#818cf8'}},
+    {{alias:'solar',     label:'Radiación alta',   cond:v=>v>=750, desc:'Rad. media ≥ 750 W/m²',icon:'☀🟡',color:'#fbbf24'}},
+    {{alias:'viento_max',label:'Ráfaga fuerte',    cond:v=>v>=40,  desc:'Ráfaga ≥ 40 km/h',   icon:'💨🟣', color:'#a78bfa'}},
+    {{alias:'viento_max',label:'Ráfaga extrema',   cond:v=>v>=55,  desc:'Ráfaga ≥ 55 km/h',   icon:'🌀⚡', color:'#e879f9'}},
+    {{alias:'presion',   label:'Presión baja',     cond:v=>v<=1008,desc:'Presión ≤ 1008 mb',   icon:'🧭⬇', color:'#fbbf24'}},
   ];
   const total = datos.length || 1;
   const badgesEl = document.getElementById('extremos-badges');
@@ -5571,6 +5651,90 @@ function renderEventosExtremos(datos){{
       <td style="font-family:var(--mono);color:var(--tx2)">${{r.ultimo||'—'}}</td>
     </tr>`
   ).join('');
+}}
+
+// ── Filtro de rangos ─────────────────────────────────────────────────
+function aplicarFiltroRangos(){{
+  const sensor  = document.getElementById('fr-sensor')?.value || 'EEP';
+  const tMin    = parseFloat(document.getElementById('fr-t-min')?.value);
+  const tMax    = parseFloat(document.getElementById('fr-t-max')?.value);
+  const lluviaMin = parseFloat(document.getElementById('fr-lluvia')?.value);
+  const vientoMin = parseFloat(document.getElementById('fr-viento')?.value);
+  const humMin  = parseFloat(document.getElementById('fr-hum-min')?.value);
+  const presMax = parseFloat(document.getElementById('fr-pres')?.value);
+
+  const hayFiltro = [tMin,tMax,lluviaMin,vientoMin,humMin,presMax].some(v=>!isNaN(v));
+  if(!hayFiltro){{
+    document.getElementById('fr-resultado').innerHTML =
+      '<p style="color:var(--tx3);font-size:.8rem">Define al menos un criterio para buscar.</p>';
+    return;
+  }}
+
+  const dias = CLIMA.dias || {{}};
+  const todasFechas = Object.keys(dias).sort();
+  const resultados = [];
+
+  for(const fecha of todasFechas){{
+    const d = dias[fecha]?.[sensor];
+    if(!d) continue;
+    const temp    = d.temp;
+    const lluvia  = d.lluvia;
+    const viento  = d.viento_max;
+    const hum     = d.hum;
+    const presion = d.presion;
+
+    if(!isNaN(tMin)    && (temp    == null || temp    < tMin))  continue;
+    if(!isNaN(tMax)    && (temp    == null || temp    > tMax))  continue;
+    if(!isNaN(lluviaMin) && (lluvia == null || lluvia < lluviaMin)) continue;
+    if(!isNaN(vientoMin) && (viento == null || viento < vientoMin)) continue;
+    if(!isNaN(humMin)  && (hum     == null || hum     < humMin)) continue;
+    if(!isNaN(presMax) && (presion == null || presion > presMax)) continue;
+
+    resultados.push({{ fecha, temp, lluvia, viento, hum, presion,
+      tmax: d.temp_max, tmin: d.temp_min, icono: d.icono||'' }});
+  }}
+
+  const el = document.getElementById('fr-resultado');
+  if(!resultados.length){{
+    el.innerHTML = '<p style="color:#f87171;font-size:.82rem;margin:8px 0">Sin días que cumplan todos los criterios.</p>';
+    return;
+  }}
+
+  const rowHTML = resultados.map(r=>
+    `<tr>
+      <td style="font-family:var(--mono);white-space:nowrap">${{r.fecha}} ${{r.icono}}</td>
+      <td style="font-family:var(--mono)">${{r.temp!=null?r.temp.toFixed(1):'—'}}</td>
+      <td style="font-family:var(--mono);color:#f87171">${{r.tmax!=null?r.tmax.toFixed(1):'—'}}</td>
+      <td style="font-family:var(--mono);color:#60a5fa">${{r.tmin!=null?r.tmin.toFixed(1):'—'}}</td>
+      <td style="font-family:var(--mono)">${{r.hum!=null?r.hum.toFixed(0):'—'}}</td>
+      <td style="font-family:var(--mono);color:#38bdf8">${{r.lluvia!=null?r.lluvia.toFixed(1):'—'}}</td>
+      <td style="font-family:var(--mono);color:#a78bfa">${{r.viento!=null?r.viento.toFixed(0):'—'}}</td>
+      <td style="font-family:var(--mono);color:#fbbf24">${{r.presion!=null?r.presion.toFixed(1):'—'}}</td>
+    </tr>`
+  ).join('');
+
+  el.innerHTML = `
+    <p style="font-size:.78rem;color:var(--tx2);margin-bottom:8px">
+      ${{resultados.length}} día(s) encontrado(s) · Sensor: ${{sensor}}
+    </p>
+    <div style="overflow-x:auto">
+    <table class="ct" style="font-size:.76rem">
+      <thead><tr>
+        <th>Fecha</th><th>T̄ °C</th><th>T máx</th><th>T mín</th>
+        <th>Hum %</th><th>Lluvia mm</th><th>Ráfaga km/h</th><th>Presión mb</th>
+      </tr></thead>
+      <tbody>${{rowHTML}}</tbody>
+    </table>
+    </div>`;
+}}
+
+function limpiarFiltroRangos(){{
+  ['fr-t-min','fr-t-max','fr-lluvia','fr-viento','fr-hum-min','fr-pres'].forEach(id=>{{
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  }});
+  const res = document.getElementById('fr-resultado');
+  if(res) res.innerHTML = '';
 }}
 
 // ── Comparativa EEP vs UES sobre uPlot (variables independientes) ───

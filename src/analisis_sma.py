@@ -2153,22 +2153,22 @@ function buildUPac(data, w){{
     legend:{{show:true}},
     axes:[
       {{stroke:'#475569',grid:{{stroke:'rgba(255,255,255,.04)'}},ticks:{{stroke:'#475569'}}}},
-      {{scale:'pac',side:0,size:60,stroke:'#fbbf24',label:labelPac,
-        grid:{{stroke:'rgba(255,255,255,.04)'}},ticks:{{stroke:'#fbbf24'}}}},
-      {{scale:'irr',side:1,size:60,stroke:'#f59e0b',label:'Irradiancia (W/m²)',
-        grid:{{show:false}},ticks:{{stroke:'#f59e0b'}}}},
+      {{scale:'irr',side:0,size:60,stroke:'#f59e0b',label:'Irradiancia (W/m²)',
+        grid:{{stroke:'rgba(255,255,255,.04)'}},ticks:{{stroke:'#f59e0b'}}}},
+      {{scale:'pac',side:1,size:60,stroke:'#fbbf24',label:labelPac,
+        grid:{{show:false}},ticks:{{stroke:'#fbbf24'}}}},
     ],
     series:[
       {{}},
-      {{label:labelPac,     stroke:'#fbbf24',width:1.5,scale:'pac',
-        value:(u,v)=>v!=null?v.toFixed(isDiario?2:0)+(isDiario?' kWh':' W'):'—'}},
       {{label:'Irradiancia',stroke:'#f59e0b',width:1.5,scale:'irr',dash:[4,3],
         value:(u,v)=>v!=null?v.toFixed(1)+' W/m²':'—'}},
+      {{label:labelPac,     stroke:'#fbbf24',width:1.5,scale:'pac',
+        value:(u,v)=>v!=null?v.toFixed(isDiario?2:0)+(isDiario?' kWh':' W'):'—'}},
     ],
   }};
   const cont = document.getElementById('uplot-pac');
   if(!cont) return;
-  uPac = new uPlot(opts, [data.xs, pac, irr], cont);
+  uPac = new uPlot(opts, [data.xs, irr, pac], cont);
 }}
 
 function buildUTemp(data, w){{
