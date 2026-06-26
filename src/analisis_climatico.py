@@ -3821,20 +3821,6 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
   <div class="zoom-hint" id="hint-main">Clic para activar · Rueda para zoom · Arrastra para pan</div>
 </div>
 
-<!-- ══ GRÁFICO SOLAR uPlot: Irradiancia ══ -->
-<div class="uplot-card" id="card-solar">
-  <div class="uplot-title">
-    <span id="chart-solar-title">Irradiancia Solar — Día seleccionado</span>
-    <div class="zoom-controls">
-      <button class="zoom-btn" onclick="uZoomIn('solar')"    title="Zoom in">＋</button>
-      <button class="zoom-btn" onclick="uZoomOut('solar')"   title="Zoom out">－</button>
-      <button class="zoom-btn" onclick="uZoomReset('solar')" title="Reset">⟳</button>
-    </div>
-  </div>
-  <div id="uplot-solar" style="width:100%"></div>
-  <div class="zoom-hint" id="hint-solar">Clic para activar · Rueda para zoom · Arrastra para pan</div>
-</div>
-
 <!-- ══ GRID DE WIDGETS ══ -->
 <div class="widgets-grid" id="widgets-grid">
   <!-- Generados por JS -->
@@ -4334,9 +4320,7 @@ function _sum(arr){{
 // ══════════════════════════════════════════════════════════════════════
 
 let uMain  = null;   // instancia uPlot principal
-let uSolar = null;   // instancia uPlot solar
 let _uMainData  = null;  // datos crudos para zoom
-let _uSolarData = null;
 
 // ── Paleta ──────────────────────────────────────────────────────────
 const C = {{
@@ -4508,7 +4492,7 @@ function toggleChartActive(id){{
 
 // ── Botones de zoom (±20%) ───────────────────────────────────────────
 function uZoom(id, factor){{
-  const u = id==='main' ? uMain : uSolar;
+  const u = uMain;
   if(!u) return;
   const sc = u.scales.x;
   const mid = (sc.min + sc.max) / 2;
@@ -4518,15 +4502,14 @@ function uZoom(id, factor){{
 function uZoomIn(id)  {{ uZoom(id, 0.75); }}
 function uZoomOut(id) {{ uZoom(id, 1.35); }}
 function uZoomReset(id){{
-  const u = id==='main' ? uMain : uSolar;
+  const u = uMain;
   if(!u) return;
   u.setScale('x', {{ min: u.data[0][0], max: u.data[0][u.data[0].length-1] }});
 }}
 
 // ── Destruir instancia uPlot y limpiar contenedor ────────────────────
 function destroyU(id){{
-  if(id==='main')  {{ if(uMain)  {{ uMain.destroy();  uMain=null;  }} }}
-  if(id==='solar') {{ if(uSolar) {{ uSolar.destroy(); uSolar=null; }} }}
+  if(id==='main') {{ if(uMain) {{ uMain.destroy(); uMain=null; }} }}
   const el = document.getElementById('uplot-'+id);
   if(el) el.innerHTML = '';
 }}
@@ -4542,7 +4525,6 @@ function buildUData(labels, seriesArrays, esDia, fechaBase){{
 // ── GRÁFICO PRINCIPAL uPlot ──────────────────────────────────────────
 function actualizarGrafico(datos){{
   destroyU('main');
-  destroyU('solar');
   if(!datos.length) return;
 
   const esDia    = periodo==='dia' && datos.length===1
@@ -4620,39 +4602,18 @@ function actualizarGrafico(datos){{
     uMain = new uPlot(opts, uData, document.getElementById('uplot-main'));
   }}
 
-  // ──────────────────────────────────────────────────────────────────
-  // GRÁFICO SOLAR: Irradiancia (siempre visible)
-  // ──────────────────────────────────────────────────────────────────
-  const dsSolar   = get('solar');
-  const tituloSol = 'Irradiancia Solar (W/m²) — '+pref;
-  document.getElementById('chart-solar-title').textContent = tituloSol;
-
-  const uDataSolar = buildUData(labels, [dsSolar], esDia, fechaBase);
-  _uSolarData = uDataSolar;
-
-  const optsSolar = mkUOpts('uplot-solar', tituloSol, [
-    {{ label:'Tiempo' }},
-    {{ label:'Solar (W/m²)', stroke:C.solar, fill:'rgba(251,191,36,.15)', width:2 }},
-  ], 180);
-
-  uSolar = new uPlot(optsSolar, uDataSolar, document.getElementById('uplot-solar'));
-
   // Redimensionar al ancho real del contenedor
   requestAnimationFrame(()=>{{
-    const wMain  = document.getElementById('uplot-main')?.offsetWidth  || 800;
-    const wSolar = document.getElementById('uplot-solar')?.offsetWidth || 800;
-    if(uMain)  uMain.setSize({{width:wMain,  height:230}});
-    if(uSolar) uSolar.setSize({{width:wSolar, height:180}});
+    const wMain = document.getElementById('uplot-main')?.offsetWidth || 800;
+    if(uMain) uMain.setSize({{width:wMain, height:230}});
   }});
 }}
 
 // Redimensionar uPlot al cambiar tamaño de ventana
 window.addEventListener('resize', ()=>{{
   requestAnimationFrame(()=>{{
-    const wMain  = document.getElementById('uplot-main')?.offsetWidth  || 800;
-    const wSolar = document.getElementById('uplot-solar')?.offsetWidth || 800;
-    if(uMain)  uMain.setSize({{width:wMain,  height:230}});
-    if(uSolar) uSolar.setSize({{width:wSolar, height:180}});
+    const wMain = document.getElementById('uplot-main')?.offsetWidth || 800;
+    if(uMain) uMain.setSize({{width:wMain, height:230}});
   }});
 }});
 
