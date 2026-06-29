@@ -4535,7 +4535,7 @@ function actualizarGrafico(datos){{
   // ──────────────────────────────────────────────────────────────────
   // GRÁFICO PRINCIPAL: Temperatura + Humedad (o variable de tab)
   // ──────────────────────────────────────────────────────────────────
-  let s1=[], s2=[], tituloMain='', uSeriesMain=[];
+  let s1=[], s2=[], tituloMain='', uSeriesMain=[], _solarContinuoData=null;
   const isGeneral = tabActiva==='general' || tabActiva==='hum';
   const isViento  = tabActiva==='viento';
   const isSolar   = tabActiva==='solar';
@@ -4561,16 +4561,31 @@ function actualizarGrafico(datos){{
       {{ label:'Ráfaga máx. (km/h)',  stroke:'#e879f9',  fill:'rgba(232,121,249,.10)', width:2.5 }},
     ];
   }} else if(isSolar){{
-    s1 = get('solar_max');
-    s2 = esDia ? get('solar') : null;
-    tituloMain = esDia ? 'Irradiancia Solar (W/m²) — '+pref
-                       : 'Irradiancia pico diaria (W/m²) — '+pref;
-    uSeriesMain = esDia
-      ? [
-          {{ label:'Rad. máx. 5-min (W/m²)',  stroke:'#f59e0b', fill:'rgba(245,158,11,.12)', width:2.5 }},
-          {{ label:'Rad. prom. 5-min (W/m²)', stroke:C.solar,   fill:'rgba(251,191,36,.08)', width:1.5 }},
-        ]
-      : [ {{ label:'Irradiancia pico (W/m²)', stroke:C.solar, fill:'rgba(251,191,36,.20)', width:2 }} ];
+    tituloMain = 'Irradiancia Solar (W/m²) — '+pref;
+    if(esDia){{
+      s1 = serieHora('solar_max');
+      s2 = serieHora('solar');
+      uSeriesMain = [
+        {{ label:'Rad. máx. 5-min (W/m²)',  stroke:'#f59e0b', fill:'rgba(245,158,11,.12)', width:2.5 }},
+        {{ label:'Rad. prom. 5-min (W/m²)', stroke:C.solar,   fill:'rgba(251,191,36,.08)', width:1.5 }},
+      ];
+    }} else {{
+      // Serie continua: concatenar todos los intervalos de 5-min de cada día
+      // → se ven las curvas de amanecer/mediodía/ocaso de cada día, con caída a 0 en la noche
+      const _ts5=[],_sv5=[];
+      datos.forEach(e=>{{
+        const h=e.d.horas;
+        if(!h||!h.t||!h.solar) return;
+        h.t.forEach((hhmm,i)=>{{
+          _ts5.push(new Date(e.fecha+'T'+hhmm+':00').getTime()/1000);
+          const v=h.solar[i];
+          _sv5.push((v!=null&&!isNaN(v))?v:0);
+        }});
+      }});
+      _solarContinuoData=[_ts5,_sv5];
+      s1=_sv5;  // para pasar el check s1.length
+      uSeriesMain=[{{ label:'Irradiancia (W/m²)', stroke:C.solar, fill:'rgba(251,191,36,.20)', width:1 }}];
+    }}
   }} else if(tabActiva==='presion'){{
     s1 = get('presion');
     tituloMain = 'Presión (mb) — '+pref;
@@ -4582,7 +4597,9 @@ function actualizarGrafico(datos){{
   if(s1.length && uSeriesMain.length){{
     const hasDual = isGeneral || isViento || (isSolar && esDia);
     const dataArrays = hasDual ? [s1, s2] : [s1];
-    const uData = buildUData(labels, dataArrays, esDia, fechaBase);
+    const uData = _solarContinuoData
+      ? _solarContinuoData            // serie continua 5-min multi-día
+      : buildUData(labels, dataArrays, esDia, fechaBase);
     _uMainData  = uData;
 
     const opts = mkUOpts('uplot-main', tituloMain, [
