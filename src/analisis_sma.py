@@ -2113,7 +2113,7 @@ function getDatosPeriodo(){{
     if(!obj) return;
     ts.push(d);
     pac.push(obj.kwh*1000);   // kWh → Wh-equiv para comparar, mostramos kWh en tooltip
-    irr.push(obj.irr_kwh != null ? obj.irr_kwh : 0);
+    irr.push(obj.irr_max != null ? obj.irr_max : 0);
     tamb.push(obj.tamb_avg);
     tmod.push(obj.tmod_avg);
   }});
@@ -2159,7 +2159,7 @@ function buildUPac(data, w){{
   const pac  = data.pac.map(v=>v==null?null:(isDiario?v/1000:v));
   const irr  = data.irr.map(v=>v==null?null:v);
   const labelPac = isDiario ? 'Energía (kWh)' : 'Potencia AC (W)';
-  const labelIrr = isDiario ? 'Insolación (kWh/m²)' : 'Irradiancia (W/m²)';
+  const labelIrr = isDiario ? 'Irradiancia pico (W/m²)' : 'Irradiancia (W/m²)';
   const opts = {{
     width: w||800, height:220,
     cursor:{{sync:{{key:'solar'}}}},
@@ -2175,7 +2175,7 @@ function buildUPac(data, w){{
     series:[
       {{}},
       {{label:labelIrr,stroke:'#f59e0b',width:1.5,scale:'irr',dash:[4,3],
-        value:(u,v)=>v!=null?v.toFixed(isDiario?2:1)+(isDiario?' kWh/m²':' W/m²'):'—'}},
+        value:(u,v)=>v!=null?v.toFixed(1)+' W/m²':'—'}},
       {{label:labelPac,     stroke:'#fbbf24',width:1.5,scale:'pac',
         value:(u,v)=>v!=null?v.toFixed(isDiario?2:0)+(isDiario?' kWh':' W'):'—'}},
     ],
