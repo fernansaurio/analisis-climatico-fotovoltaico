@@ -4570,21 +4570,28 @@ function actualizarGrafico(datos){{
         {{ label:'Rad. prom. 5-min (W/m²)', stroke:C.solar,   fill:'rgba(251,191,36,.08)', width:1.5 }},
       ];
     }} else {{
-      // Serie continua: concatenar todos los intervalos de 5-min de cada día
-      // → se ven las curvas de amanecer/mediodía/ocaso de cada día, con caída a 0 en la noche
-      const _ts5=[],_sv5=[];
+      // Serie continua 5-min + línea de energía diaria (kWh/m²)
+      // Eje izquierdo: irradiancia W/m² (curvas amanecer→mediodía→ocaso→0)
+      // Eje derecho:   energía integrada kWh/m²/día (línea plana por día — útil para estimar venta)
+      const _ts5=[],_sv5=[],_ek5=[];
       datos.forEach(e=>{{
         const h=e.d.horas;
         if(!h||!h.t||!h.solar) return;
+        const kwh=e.d.solar;  // kWh/m²/día (integración rectangular)
         h.t.forEach((hhmm,i)=>{{
           _ts5.push(new Date(e.fecha+'T'+hhmm+':00').getTime()/1000);
           const v=h.solar[i];
           _sv5.push((v!=null&&!isNaN(v))?v:0);
+          _ek5.push(kwh!=null?kwh:null);
         }});
       }});
-      _solarContinuoData=[_ts5,_sv5];
-      s1=_sv5;  // para pasar el check s1.length
-      uSeriesMain=[{{ label:'Irradiancia (W/m²)', stroke:C.solar, fill:'rgba(251,191,36,.20)', width:1 }}];
+      _solarContinuoData=[_ts5,_sv5,_ek5];
+      s1=_sv5; s2=_ek5;
+      uSeriesMain=[
+        {{ label:'Irradiancia (W/m²)',   stroke:C.solar,    fill:'rgba(251,191,36,.18)', width:1 }},
+        {{ label:'Energía (kWh/m²/día)', stroke:'#34d399',  fill:'rgba(52,211,153,.08)', width:2,
+           scale:'kwh', value:(u,v)=>v!=null?v.toFixed(3)+' kWh/m²':'—' }},
+      ];
     }}
   }} else if(tabActiva==='presion'){{
     s1 = get('presion');
@@ -4618,6 +4625,20 @@ function actualizarGrafico(datos){{
         ticks:  {{ stroke:C.axis }},
         font:   '10px Outfit, sans-serif',
         values: (u, vals) => vals.map(v => v!=null ? v.toFixed(0)+'%' : ''),
+      }});
+    }}
+    // Segundo eje Y para energía solar (kWh/m²/día)
+    if(isSolar && !esDia){{
+      opts.scales['kwh'] = {{ auto:true }};
+      opts.axes.push({{
+        scale:  'kwh',
+        side:   1,
+        stroke: '#34d399',
+        label:  'Energía (kWh/m²/día)',
+        grid:   {{ show:false }},
+        ticks:  {{ stroke:'#34d399' }},
+        font:   '10px Outfit, sans-serif',
+        values: (u, vals) => vals.map(v => v!=null ? v.toFixed(2) : ''),
       }});
     }}
 

@@ -1158,18 +1158,18 @@ def generar_seccion_html_sma(resultado: dict) -> str:
   <span style="height:1px;flex:3;background:linear-gradient(90deg,rgba(255,255,255,.10),transparent)"></span>
 </div>
 
-<!-- KPIs SMA -->
+<!-- KPIs SMA (actualizados dinámicamente por renderKPIs()) -->
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
 
   <div style="background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.10);
               border-radius:16px;padding:22px 20px;backdrop-filter:blur(18px)">
     <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;
-                color:#94a3b8;margin-bottom:10px">⚡ Energía Total Acumulada</div>
+                color:#94a3b8;margin-bottom:10px" id="kpi-energia-label">⚡ Energía del Período</div>
     <div style="font-size:clamp(22px,2.5vw,32px);font-weight:700;
                 color:#4ade80;text-shadow:0 0 20px rgba(74,222,128,.35)">
-      {etotal_kwh:,.1f}<span style="font-size:14px;font-weight:400;color:#94a3b8;margin-left:4px">kWh</span>
+      <span id="kpi-energia-val">{etotal_kwh:,.1f}</span><span style="font-size:14px;font-weight:400;color:#94a3b8;margin-left:4px">kWh</span>
     </div>
-    <div style="font-size:12px;color:#64748b;margin-top:8px">
+    <div style="font-size:12px;color:#64748b;margin-top:8px" id="kpi-energia-sub">
       {len(meses_sorted)} meses registrados
     </div>
   </div>
@@ -1180,10 +1180,10 @@ def generar_seccion_html_sma(resultado: dict) -> str:
                 color:#94a3b8;margin-bottom:10px">☀️ Irradiancia Media</div>
     <div style="font-size:clamp(22px,2.5vw,32px);font-weight:700;
                 color:#fbbf24;text-shadow:0 0 20px rgba(251,191,36,.35)">
-      {_fmt(stats.get('irr',{}),'media',0)}<span style="font-size:14px;font-weight:400;color:#94a3b8;margin-left:4px">W/m²</span>
+      <span id="kpi-irr-val">{_fmt(stats.get('irr',{}),'media',0)}</span><span style="font-size:14px;font-weight:400;color:#94a3b8;margin-left:4px">W/m²</span>
     </div>
     <div style="font-size:12px;color:#64748b;margin-top:8px">
-      Máx: {_fmt(stats.get('irr',{}),'maximo',0)} W/m²
+      Máx: <span id="kpi-irr-max">{_fmt(stats.get('irr',{}),'maximo',0)}</span> W/m²
     </div>
   </div>
 
@@ -1193,23 +1193,23 @@ def generar_seccion_html_sma(resultado: dict) -> str:
                 color:#94a3b8;margin-bottom:10px">⚡ Potencia AC Media</div>
     <div style="font-size:clamp(22px,2.5vw,32px);font-weight:700;
                 color:#38bdf8;text-shadow:0 0 20px rgba(56,189,248,.35)">
-      {_fmt(stats.get('pac_total',{}),'media',0)}<span style="font-size:14px;font-weight:400;color:#94a3b8;margin-left:4px">W</span>
+      <span id="kpi-pac-val">{_fmt(stats.get('pac_total',{}),'media',0)}</span><span id="kpi-pac-unit" style="font-size:14px;font-weight:400;color:#94a3b8;margin-left:4px">W</span>
     </div>
     <div style="font-size:12px;color:#64748b;margin-top:8px">
-      Pico: {_fmt(stats.get('pac_total',{}),'maximo',0)} W
+      Pico: <span id="kpi-pac-max">{_fmt(stats.get('pac_total',{}),'maximo',0)}</span> <span id="kpi-pac-max-unit">W</span>
     </div>
   </div>
 
   <div style="background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.10);
               border-radius:16px;padding:22px 20px;backdrop-filter:blur(18px)">
     <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;
-                color:#94a3b8;margin-bottom:10px">🔗 Corr. Irr-Pac</div>
+                color:#94a3b8;margin-bottom:10px">🌡 Temperatura Media</div>
     <div style="font-size:clamp(22px,2.5vw,32px);font-weight:700;
                 color:#a78bfa;text-shadow:0 0 20px rgba(167,139,250,.35)">
-      {r_fmt}
+      <span id="kpi-tamb-val">—</span><span style="font-size:14px;font-weight:400;color:#94a3b8;margin-left:4px">°C amb.</span>
     </div>
     <div style="font-size:12px;color:#64748b;margin-top:8px">
-      {r_interp} · N={n_pairs:,}
+      Módulo: <span id="kpi-tmod-val">—</span> °C
     </div>
   </div>
 
@@ -2098,7 +2098,7 @@ function getDatosPeriodo(){{
     return {{ ts: h.t||[], pac: h.pac||[], irr: h.irr||[], tamb: h.tamb||[], tmod: h.tmod||[] }};
   }}
 
-  // Para mes/año/todo: agregar por día (un punto = media diaria)
+  // Para mes/año/todo: serie continua 5-min de irradiancia + energía diaria kWh
   let filtro;
   if(periodo==='mes')      filtro = d => calMes && d.startsWith(calMes);
   else if(periodo==='anio'){{
@@ -2107,17 +2107,27 @@ function getDatosPeriodo(){{
   }} else filtro = () => true;
 
   const sel = dias.filter(filtro);
-  const ts=[],pac=[],irr=[],tamb=[],tmod=[];
+  // Serie continua 5-min: todos los sensores en la misma resolución temporal
+  const ts5=[],irr5=[],kwh5=[],tamb5=[],tmod5=[];
   sel.forEach(d => {{
     const obj = SOLAR.dias[d];
     if(!obj) return;
-    ts.push(d);
-    pac.push(obj.kwh*1000);   // kWh → Wh-equiv para comparar, mostramos kWh en tooltip
-    irr.push(obj.irr_max != null ? obj.irr_max : 0);
-    tamb.push(obj.tamb_avg);
-    tmod.push(obj.tmod_avg);
+    const h = obj.horas;
+    const kwhDia = obj.kwh;
+    if(h && h.t){{
+      h.t.forEach((hhmm,i)=>{{
+        ts5.push(new Date(d+'T'+hhmm+':00').getTime()/1000);
+        const vi=h.irr  ? h.irr[i]  : null;
+        const vt=h.tamb ? h.tamb[i] : null;
+        const vm=h.tmod ? h.tmod[i] : null;
+        irr5.push((vi!=null&&!isNaN(vi))?vi:0);
+        kwh5.push(kwhDia!=null?kwhDia:null);
+        tamb5.push((vt!=null&&!isNaN(vt))?vt:null);
+        tmod5.push((vm!=null&&!isNaN(vm))?vm:null);
+      }});
+    }}
   }});
-  return {{ts, pac, irr, tamb, tmod, _diario:true}};
+  return {{ts:ts5, pac:kwh5, irr:irr5, tamb:tamb5, tmod:tmod5, _diario:true, _continuo:true}};
 }}
 
 // ── uPlot ─────────────────────────────────────────────────────────────
@@ -2130,14 +2140,18 @@ function tsToSec(tStr, fecha){{
 function construirSeriesUplot(datos){{
   if(!datos.ts.length) return null;
   const isDiario = datos._diario;
+  const isContinuo = datos._continuo;
   let xs;
-  if(isDiario){{
-    // Usar mediodía local para que la etiqueta de fecha no caiga en día anterior
+  if(isDiario && !isContinuo){{
+    // Vista diaria por día: mediodía para que la etiqueta no caiga en día anterior
     xs = datos.ts.map(d => new Date(d + 'T12:00:00').getTime() / 1000);
+  }} else if(isContinuo){{
+    // Ya son timestamps Unix (calculados en getDatosPeriodo)
+    xs = datos.ts;
   }} else {{
     xs = datos.ts.map(t => tsToSec(t, diaActivo));
   }}
-  return {{ xs, pac:datos.pac, irr:datos.irr, tamb:datos.tamb, tmod:datos.tmod, isDiario }};
+  return {{ xs, pac:datos.pac, irr:datos.irr, tamb:datos.tamb, tmod:datos.tmod, isDiario, isContinuo }};
 }}
 
 const _uOpts = (title, w) => ({{
@@ -2156,10 +2170,16 @@ function buildUPac(data, w){{
   if(uPac){{ uPac.destroy(); uPac=null; }}
   if(!data) return;
   const isDiario = data.isDiario;
-  const pac  = data.pac.map(v=>v==null?null:(isDiario?v/1000:v));
-  const irr  = data.irr.map(v=>v==null?null:v);
-  const labelPac = isDiario ? 'Energía (kWh)' : 'Potencia AC (W)';
-  const labelIrr = isDiario ? 'Irradiancia pico (W/m²)' : 'Irradiancia (W/m²)';
+  const isContinuo = data.isContinuo;
+  const irr = data.irr.map(v=>v==null?null:v);
+  // Continuo: pac ya contiene kWh/día (repetido por cada 5-min del día)
+  // Diario sin continuo: pac tiene Wh-equiv (kwh*1000), dividimos para mostrar kWh
+  // Día individual: pac tiene W
+  const pac = data.pac.map(v=>v==null?null:(isDiario&&!isContinuo?v/1000:v));
+  const labelIrr = isContinuo ? 'Irradiancia (W/m²)' : (isDiario ? 'Irradiancia pico (W/m²)' : 'Irradiancia (W/m²)');
+  const labelPac = isContinuo ? 'Energía generada (kWh/día)' : (isDiario ? 'Energía (kWh)' : 'Potencia AC (W)');
+  const irrWidth = isContinuo ? 1 : 1.5;
+  const pacWidth = isContinuo ? 2 : 1.5;
   const opts = {{
     width: w||800, height:220,
     cursor:{{sync:{{key:'solar'}}}},
@@ -2174,10 +2194,12 @@ function buildUPac(data, w){{
     ],
     series:[
       {{}},
-      {{label:labelIrr,stroke:'#f59e0b',width:1.5,scale:'irr',dash:[4,3],
+      {{label:labelIrr,stroke:'#f59e0b',width:irrWidth,scale:'irr',
+        fill:isContinuo?'rgba(245,158,11,.12)':undefined,
+        dash:isContinuo?undefined:[4,3],
         value:(u,v)=>v!=null?v.toFixed(1)+' W/m²':'—'}},
-      {{label:labelPac,     stroke:'#fbbf24',width:1.5,scale:'pac',
-        value:(u,v)=>v!=null?v.toFixed(isDiario?2:0)+(isDiario?' kWh':' W'):'—'}},
+      {{label:labelPac,stroke:'#34d399',width:pacWidth,scale:'pac',
+        value:(u,v)=>v!=null?v.toFixed(isContinuo||isDiario?2:0)+(isContinuo||isDiario?' kWh':' W'):'—'}},
     ],
   }};
   const cont = document.getElementById('uplot-pac');
@@ -2213,12 +2235,79 @@ function buildUTemp(data, w){{
 
 function chartWidth(){{ return Math.min(document.querySelector('.main').offsetWidth - 80, 1300); }}
 
+function renderKPIs(){{
+  const dias = fechasDias();
+  let filtro;
+  if(periodo==='dia' && diaActivo)      filtro = d => d===diaActivo;
+  else if(periodo==='mes')              filtro = d => calMes && d.startsWith(calMes);
+  else if(periodo==='anio'){{
+    const anio = diaActivo ? diaActivo.slice(0,4) : (dias[dias.length-1]||'').slice(0,4);
+    filtro = d => d.startsWith(anio);
+  }} else filtro = () => true;
+
+  const sel = dias.filter(filtro);
+  let sumKwh=0, irrVals=[], pacVals=[], tambVals=[], tmodVals=[], nDias=0;
+  sel.forEach(d => {{
+    const obj = SOLAR.dias[d];
+    if(!obj) return;
+    nDias++;
+    sumKwh += obj.kwh||0;
+    if(obj.irr_max!=null) irrVals.push(obj.irr_max);
+    if(obj.pac_max!=null) pacVals.push(obj.pac_max);
+    if(obj.tamb_avg!=null) tambVals.push(obj.tamb_avg);
+    if(obj.tmod_avg!=null) tmodVals.push(obj.tmod_avg);
+    const h=obj.horas;
+    if(h&&h.irr) h.irr.forEach(v=>{{ if(v!=null&&v>0) irrVals.push(v); }});
+    if(h&&h.pac) h.pac.forEach(v=>{{ if(v!=null&&v>0) pacVals.push(v); }});
+  }});
+
+  const mean = arr => arr.length ? (arr.reduce((a,b)=>a+b,0)/arr.length) : null;
+  const max  = arr => arr.length ? Math.max(...arr) : null;
+  const fmt  = (v,d=1) => v!=null ? v.toFixed(d) : '—';
+  const fmtN = (v,d=1) => v!=null ? Number(v.toFixed(d)).toLocaleString('es-SV') : '—';
+
+  // Energía
+  const eLabel = periodo==='dia' ? '⚡ Energía del Día'
+               : periodo==='mes' ? '⚡ Energía del Mes'
+               : periodo==='anio'? '⚡ Energía del Año'
+               : '⚡ Energía Total Acumulada';
+  const el = document.getElementById('kpi-energia-label');
+  const ev = document.getElementById('kpi-energia-val');
+  const es = document.getElementById('kpi-energia-sub');
+  if(el) el.textContent = eLabel;
+  if(ev) ev.textContent = fmtN(sumKwh, 1);
+  if(es) es.textContent = nDias + (nDias===1?' día':' días') + ' · '+sel.length+' registros';
+
+  // Irradiancia media de lecturas con sol (>0)
+  const irrMed = mean(irrVals.filter(v=>v>0));
+  const irrMax = max(irrVals);
+  const iv = document.getElementById('kpi-irr-val');
+  const im = document.getElementById('kpi-irr-max');
+  if(iv) iv.textContent = fmt(irrMed, 0);
+  if(im) im.textContent = fmt(irrMax, 0);
+
+  // Potencia AC
+  const pacMed = mean(pacVals.filter(v=>v>0));
+  const pacMax = max(pacVals);
+  const pv = document.getElementById('kpi-pac-val');
+  const pm = document.getElementById('kpi-pac-max');
+  if(pv) pv.textContent = fmt(pacMed, 0);
+  if(pm) pm.textContent = fmt(pacMax, 0);
+
+  // Temperatura
+  const tv = document.getElementById('kpi-tamb-val');
+  const tm2 = document.getElementById('kpi-tmod-val');
+  if(tv) tv.textContent = fmt(mean(tambVals));
+  if(tm2) tm2.textContent = fmt(mean(tmodVals));
+}}
+
 function actualizarGraficos(){{
   const datos  = getDatosPeriodo();
   const series = construirSeriesUplot(datos);
   const w      = chartWidth();
   buildUPac(series,  w);
   buildUTemp(series, w);
+  renderKPIs();
   // Ajustar al ancho real tras cualquier reflow del DOM
   requestAnimationFrame(() => {{
     const w2 = chartWidth();
