@@ -3725,6 +3725,7 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
       <button class="btn-tab" id="tab-lluvia"   onclick="setTab('lluvia')">🌧 Lluvia</button>
       <button class="btn-tab" id="tab-viento"  onclick="setTab('viento')">💨 Viento</button>
       <button class="btn-tab" id="tab-hum"     onclick="setTab('hum')">💧 Hum</button>
+      <button class="btn-tab" id="tab-solar"   onclick="setTab('solar')">☀ Solar</button>
       <button class="btn-tab" id="tab-presion" onclick="setTab('presion')">🧭 Presión</button>
     </div>
     <div class="nav-sep"></div>
@@ -4534,6 +4535,7 @@ function actualizarGrafico(datos){{
   let s1=[], s2=[], tituloMain='', uSeriesMain=[];
   const isGeneral = tabActiva==='general' || tabActiva==='hum';
   const isViento  = tabActiva==='viento';
+  const isSolar   = tabActiva==='solar';
 
   if(isGeneral){{
     s1 = get('temp'); s2 = get('hum');
@@ -4555,6 +4557,16 @@ function actualizarGrafico(datos){{
       {{ label:'Viento prom. (km/h)', stroke:C.viento,   fill:'rgba(167,139,250,.08)', width:1.5 }},
       {{ label:'Ráfaga máx. (km/h)',  stroke:'#e879f9',  fill:'rgba(232,121,249,.10)', width:2.5 }},
     ];
+  }} else if(isSolar){{
+    s1 = get('solar');
+    s2 = esDia ? null : get('solar_max');
+    tituloMain = 'Irradiancia Solar (W/m²) — '+pref;
+    uSeriesMain = esDia
+      ? [ {{ label:'Irradiancia (W/m²)', stroke:C.solar, fill:'rgba(251,191,36,.13)', width:2 }} ]
+      : [
+          {{ label:'Rad. media (W/m²)', stroke:C.solar,   fill:'rgba(251,191,36,.08)', width:1.5 }},
+          {{ label:'Rad. máx.  (W/m²)', stroke:'#f59e0b', fill:'rgba(245,158,11,.12)', width:2.5 }},
+        ];
   }} else if(tabActiva==='presion'){{
     s1 = get('presion');
     tituloMain = 'Presión (mb) — '+pref;
@@ -4564,7 +4576,8 @@ function actualizarGrafico(datos){{
   document.getElementById('chart-title').textContent = tituloMain;
 
   if(s1.length && uSeriesMain.length){{
-    const dataArrays = (isGeneral || isViento) ? [s1, s2] : [s1];
+    const hasDual = isGeneral || isViento || (isSolar && !esDia);
+    const dataArrays = hasDual ? [s1, s2] : [s1];
     const uData = buildUData(labels, dataArrays, esDia, fechaBase);
     _uMainData  = uData;
 
@@ -6234,7 +6247,7 @@ function setTab(t){{
   document.querySelectorAll('[id^="tab-"]').forEach(b=>b.classList.remove('active'));
   document.getElementById('tab-'+t).classList.add('active');
   // Sincronizar variable académica con el tab activo
-  const _tabMap = {{general:'temp',hum:'hum',lluvia:'lluvia',viento:'viento',presion:'presion'}};
+  const _tabMap = {{general:'temp',hum:'hum',lluvia:'lluvia',viento:'viento',solar:'solar',presion:'presion'}};
   acadVar = _tabMap[t] || 'temp';
   document.querySelectorAll('[id^="av-"]').forEach(b=>b.classList.remove('active'));
   const avBtn = document.getElementById('av-'+acadVar);
