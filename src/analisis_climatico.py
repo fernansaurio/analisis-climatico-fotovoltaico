@@ -3624,12 +3624,9 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
 .uplot-card{{background:var(--card);border:1px solid var(--brd);border-radius:18px;
   padding:16px 18px 12px;margin-top:14px;backdrop-filter:blur(16px);position:relative;
   transition:border-color .2s}}
-/* Estado bloqueado (por defecto): cursor normal, sin interacción de zoom/pan */
-.uplot-card .u-over{{cursor:default!important;pointer-events:none}}
-/* Estado activo: cursor crosshair, interacción habilitada */
-.uplot-card.chart-active .u-over{{cursor:crosshair!important;pointer-events:all}}
-.uplot-card.chart-active{{border-color:rgba(56,189,248,.45);
-  box-shadow:0 0 0 1px rgba(56,189,248,.2)}}
+/* Siempre interactivo: cursor grab, pan/zoom sin activación */
+.uplot-card .u-over{{cursor:grab!important;pointer-events:all}}
+.uplot-card .u-over.dragging{{cursor:grabbing!important}}
 .uplot-title{{font-size:.72rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;
   color:var(--tx2);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}}
 .zoom-controls{{display:flex;gap:6px;align-items:center}}
@@ -3647,9 +3644,7 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
   border-radius:6px;padding:3px 9px;font-size:.75rem;cursor:pointer;transition:.15s;user-select:none}}
 .zoom-btn:hover{{background:rgba(56,189,248,.12);color:var(--blue);border-color:rgba(56,189,248,.3)}}
 /* Hint dinámico */
-.zoom-hint{{font-size:.62rem;color:var(--tx3);margin-top:6px;text-align:right;
-  transition:color .2s}}
-.uplot-card.chart-active .zoom-hint{{color:var(--blue)}}
+.zoom-hint{{font-size:.62rem;color:var(--tx3);margin-top:6px;text-align:right}}
 
 /* ── Sparkline dentro de widget ── */
 .spark-wrap{{margin-top:8px;position:relative;height:40px}}
@@ -3818,7 +3813,7 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
     </div>
   </div>
   <div id="uplot-main" style="width:100%"></div>
-  <div class="zoom-hint" id="hint-main">Clic para activar · Rueda para zoom · Arrastra para pan</div>
+  <div class="zoom-hint" id="hint-main">Arrastra para mover · Ctrl+Rueda: zoom · Doble clic: reset</div>
 </div>
 
 <!-- ══ GRID DE WIDGETS ══ -->
@@ -4395,28 +4390,34 @@ function mkUOpts(containerId, titulo, series, height){{
     series,
     hooks: {{
       ready: [u => {{
-        // Pan con click+drag (el mousedown se define después del wheel)
         const over = u.over;
         let dragging = false, startX = 0, startMin, startMax;
+
+        // Pan con arrastre — siempre activo sin necesidad de activación
+        over.addEventListener('mousedown', e => {{
+          if(e.button !== 0) return;
+          dragging = true;
+          startX   = e.clientX;
+          const sc = u.scales.x;
+          startMin = sc.min; startMax = sc.max;
+          over.classList.add('dragging');
+        }});
         window.addEventListener('mousemove', e => {{
           if(!dragging) return;
-          const dx     = e.clientX - startX;
-          const range  = startMax - startMin;
-          const pxRange = over.offsetWidth;
-          const shift  = -(dx / pxRange) * range;
+          const dx    = e.clientX - startX;
+          const range = startMax - startMin;
+          const shift = -(dx / over.offsetWidth) * range;
           u.setScale('x', {{ min: startMin+shift, max: startMax+shift }});
         }});
-        window.addEventListener('mouseup', () => {{ dragging = false; }});
+        window.addEventListener('mouseup', () => {{
+          dragging = false;
+          over.classList.remove('dragging');
+        }});
 
-        // ── Wheel: clic sobre la gráfica la activa; si ya está activa hace zoom ──
-        // passive:false en el card padre para poder llamar preventDefault siempre
+        // Ctrl+rueda = zoom centrado en cursor; sin Ctrl → scroll normal de página
         const card = over.closest('.uplot-card');
         card.addEventListener('wheel', e => {{
-          if(!card.classList.contains('chart-active')){{
-            // No activa → dejar que el scroll siga normalmente en la página
-            return;
-          }}
-          // Ya activa → hacer zoom (se activa solo con clic)
+          if(!e.ctrlKey) return;
           e.preventDefault();
           const sc    = u.scales.x;
           const range = sc.max - sc.min;
@@ -4431,25 +4432,7 @@ function mkUOpts(containerId, titulo, series, height){{
           }});
         }}, {{ passive:false }});
 
-        // Drag pan — SOLO si activo
-        over.addEventListener('mousedown', e => {{
-          if(!card.classList.contains('chart-active')) return;
-          if(e.button !== 0) return;
-          dragging = true;
-          startX   = e.clientX;
-          const sc = u.scales.x;
-          startMin = sc.min; startMax = sc.max;
-        }});
-
-        // Clic simple fuera del drag → activar/desactivar
-        over.addEventListener('click', e => {{
-          if(!card.classList.contains('chart-active')){{
-            const idCard = card.id.replace('card-','');
-            toggleChartActive(idCard);
-          }}
-        }});
-
-        // Doble clic → reset de zoom (la gráfica ya está activa por el clic previo)
+        // Doble clic → reset completo del zoom
         over.addEventListener('dblclick', () => {{
           u.setScale('x', {{ min: u.data[0][0], max: u.data[0][u.data[0].length-1] }});
         }});
@@ -5845,27 +5828,25 @@ function actualizarCompUPlot(datos){{
         const ov = u.over;
         let dr=false,sx=0,sm,sM;
         ov.addEventListener('mousedown',e=>{{
-          if(!ov.closest('.uplot-card')?.classList.contains('chart-active')||e.button!==0) return;
+          if(e.button!==0) return;
           dr=true; sx=e.clientX; sm=u.scales.x.min; sM=u.scales.x.max;
+          ov.classList.add('dragging');
         }});
         window.addEventListener('mousemove',e=>{{
           if(!dr) return;
           const dx=e.clientX-sx, rng=sM-sm, sh=-(dx/ov.offsetWidth)*rng;
           u.setScale('x',{{min:sm+sh,max:sM+sh}});
         }});
-        window.addEventListener('mouseup',()=>{{dr=false;}});
+        window.addEventListener('mouseup',()=>{{dr=false; ov.classList.remove('dragging');}});
         const cardC = ov.closest('.uplot-card');
         cardC.addEventListener('wheel',e=>{{
-          if(!cardC.classList.contains('chart-active')) return;
+          if(!e.ctrlKey) return;
           e.preventDefault();
           const sc=u.scales.x,rng=sc.max-sc.min,f=e.deltaY>0?1.25:0.8;
           const rc=ov.getBoundingClientRect(),rt=(e.clientX-rc.left)/rc.width;
           const pv=sc.min+rt*rng,nr=rng*f;
           u.setScale('x',{{min:pv-rt*nr,max:pv+(1-rt)*nr}});
         }},{{passive:false}});
-        ov.addEventListener('click',()=>{{
-          if(!cardC.classList.contains('chart-active')) toggleChartActive('comp');
-        }});
         ov.addEventListener('dblclick',()=>{{
           u.setScale('x',{{min:u.data[0][0],max:u.data[0][u.data[0].length-1]}});
         }});
@@ -6573,28 +6554,25 @@ function _mkPredUPlot(elId, cardId, ts, vals, color, unit){{
       const ov = u.over;
       let dr=false,sx=0,sm,sM;
       ov.addEventListener('mousedown',e=>{{
-        const card=ov.closest('.uplot-card');
-        if(!card?.classList.contains('chart-active')||e.button!==0) return;
+        if(e.button!==0) return;
         dr=true; sx=e.clientX; sm=u.scales.x.min; sM=u.scales.x.max;
+        ov.classList.add('dragging');
       }});
       window.addEventListener('mousemove',e=>{{
         if(!dr) return;
         const dx=e.clientX-sx, rng=sM-sm, sh=-(dx/ov.offsetWidth)*rng;
         u.setScale('x',{{min:sm+sh,max:sM+sh}});
       }});
-      window.addEventListener('mouseup',()=>{{dr=false;}});
+      window.addEventListener('mouseup',()=>{{dr=false; ov.classList.remove('dragging');}});
       const card = ov.closest('.uplot-card');
       card.addEventListener('wheel',e=>{{
-        if(!card.classList.contains('chart-active')) return;
+        if(!e.ctrlKey) return;
         e.preventDefault();
         const sc=u.scales.x,rng=sc.max-sc.min,f=e.deltaY>0?1.25:0.8;
         const rc=ov.getBoundingClientRect(),rt=(e.clientX-rc.left)/rc.width;
         const pv=sc.min+rt*rng,nr=rng*f;
         u.setScale('x',{{min:pv-rt*nr,max:pv+(1-rt)*nr}});
       }},{{passive:false}});
-      ov.addEventListener('click',()=>{{
-        if(!card.classList.contains('chart-active')) toggleChartActive(cardId.replace('card-',''));
-      }});
       ov.addEventListener('dblclick',()=>{{
         u.setScale('x',{{min:u.data[0][0],max:u.data[0][u.data[0].length-1]}});
       }});
