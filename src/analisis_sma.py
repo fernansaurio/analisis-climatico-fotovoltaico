@@ -378,6 +378,8 @@ def _cargar_csv_dia(ruta: str, fecha: datetime.date) -> list:
 
         # Energía estimada en este intervalo (W → Wh)
         fila["energia_wh"] = fila["pac_total"] * intervalo_min / 60.0
+        # Irradiancia integrada en este intervalo (W/m² → Wh/m²)
+        fila["irr_wh"] = (fila.get("irr") or 0.0) * intervalo_min / 60.0
 
         registros.append(fila)
 
@@ -1423,10 +1425,21 @@ def _construir_json_solar(df) -> dict:
         kwh_day = round(kwh / 1000.0, 3)
         energia_diaria_kwh[fecha] = kwh_day
 
+        irr_wh_sum = 0.0
+        if "irr_wh" in grp.columns:
+            for v in grp["irr_wh"].tolist():
+                if v is not None and not (v != v):
+                    try:
+                        irr_wh_sum += float(v)
+                    except (TypeError, ValueError):
+                        pass
+        irr_kwh_day = round(irr_wh_sum / 1000.0, 3)
+
         dias_json[fecha] = {
             "kwh":      kwh_day,
             "pac_max":  round(_maximo(pac_vals),  2) if pac_vals  else 0,
             "irr_max":  round(_maximo(irr_vals),  2) if irr_vals  else 0,
+            "irr_kwh":  irr_kwh_day,
             "tamb_avg": round(_media(tamb_vals),   2) if tamb_vals else None,
             "tmod_avg": round(_media(tmod_vals),   2) if tmod_vals else None,
             "horas": {
@@ -2100,7 +2113,7 @@ function getDatosPeriodo(){{
     if(!obj) return;
     ts.push(d);
     pac.push(obj.kwh*1000);   // kWh → Wh-equiv para comparar, mostramos kWh en tooltip
-    irr.push(obj.irr_max);
+    irr.push(obj.irr_kwh != null ? obj.irr_kwh : 0);
     tamb.push(obj.tamb_avg);
     tmod.push(obj.tmod_avg);
   }});
@@ -2146,6 +2159,7 @@ function buildUPac(data, w){{
   const pac  = data.pac.map(v=>v==null?null:(isDiario?v/1000:v));
   const irr  = data.irr.map(v=>v==null?null:v);
   const labelPac = isDiario ? 'Energía (kWh)' : 'Potencia AC (W)';
+  const labelIrr = isDiario ? 'Insolación (kWh/m²)' : 'Irradiancia (W/m²)';
   const opts = {{
     width: w||800, height:220,
     cursor:{{sync:{{key:'solar'}}}},
@@ -2153,15 +2167,15 @@ function buildUPac(data, w){{
     legend:{{show:true}},
     axes:[
       {{stroke:'#475569',grid:{{stroke:'rgba(255,255,255,.04)'}},ticks:{{stroke:'#475569'}}}},
-      {{scale:'irr',side:3,size:60,stroke:'#f59e0b',label:'Irradiancia (W/m²)',
+      {{scale:'irr',side:3,size:60,stroke:'#f59e0b',label:labelIrr,
         grid:{{stroke:'rgba(255,255,255,.04)'}},ticks:{{stroke:'#f59e0b'}}}},
       {{scale:'pac',side:1,size:60,stroke:'#fbbf24',label:labelPac,
         grid:{{show:false}},ticks:{{stroke:'#fbbf24'}}}},
     ],
     series:[
       {{}},
-      {{label:'Irradiancia',stroke:'#f59e0b',width:1.5,scale:'irr',dash:[4,3],
-        value:(u,v)=>v!=null?v.toFixed(1)+' W/m²':'—'}},
+      {{label:labelIrr,stroke:'#f59e0b',width:1.5,scale:'irr',dash:[4,3],
+        value:(u,v)=>v!=null?v.toFixed(isDiario?2:1)+(isDiario?' kWh/m²':' W/m²'):'—'}},
       {{label:labelPac,     stroke:'#fbbf24',width:1.5,scale:'pac',
         value:(u,v)=>v!=null?v.toFixed(isDiario?2:0)+(isDiario?' kWh':' W'):'—'}},
     ],

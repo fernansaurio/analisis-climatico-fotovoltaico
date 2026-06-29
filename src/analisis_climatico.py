@@ -3106,10 +3106,11 @@ def _construir_json_clima(df_eep, df_ues) -> dict:
         Stats diarios con numpy vectorizado: max/min/sum/mean sobre arrays,
         sin bucles Python sobre filas individuales.
         """
-        _ALIAS_TEXTO = {"dir_viento"}
-        _ALIAS_MAX   = {"solar_max", "temp_max", "uv_max", "viento_max"}
-        _ALIAS_MIN   = {"temp_min"}
-        _ALIAS_SUM   = {"lluvia", "et"}
+        _ALIAS_TEXTO       = {"dir_viento"}
+        _ALIAS_MAX         = {"solar_max", "temp_max", "uv_max", "viento_max"}
+        _ALIAS_MIN         = {"temp_min"}
+        _ALIAS_SUM         = {"lluvia", "et"}
+        _ALIAS_INTEGR_5MIN = {"solar"}  # Σ(W/m²)×Δt(5min)/1000 → kWh/m²/día
 
         # Columnas numéricas -> float64 de una vez (pandas, permitido)
         cols_presentes = [(c, a) for c, a in cols_mapa if c in df.columns]
@@ -3166,6 +3167,8 @@ def _construir_json_clima(df_eep, df_ues) -> dict:
                     reg[alias] = round(_minimo(vals_list), 2)
                 elif alias in _ALIAS_SUM:
                     reg[alias] = round(float(np.nansum(arr)), 2)
+                elif alias in _ALIAS_INTEGR_5MIN:
+                    reg[alias] = round(sum(vals_list) * (5.0 / 60.0) / 1000.0, 3)
                 else:
                     reg[alias] = round(_media(vals_list), 2)
 
@@ -4094,7 +4097,7 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
   <div style="margin-top:12px">
     <table class="ct" id="pred-table">
       <thead><tr>
-        <th>Fecha</th><th>Día del año</th><th>Temp. predicha (°C)</th><th>Solar predicha (W/m²)</th>
+        <th>Fecha</th><th>Día del año</th><th>Temp. predicha (°C)</th><th>Solar predicha (kWh/m²)</th>
       </tr></thead>
       <tbody id="pred-tbody"></tbody>
     </table>
@@ -4559,14 +4562,12 @@ function actualizarGrafico(datos){{
     ];
   }} else if(isSolar){{
     s1 = get('solar');
-    s2 = esDia ? null : get('solar_max');
-    tituloMain = 'Irradiancia Solar (W/m²) — '+pref;
+    s2 = null;
+    tituloMain = esDia ? 'Irradiancia Solar (W/m²) — '+pref
+                       : 'Insolación Solar (kWh/m²) — '+pref;
     uSeriesMain = esDia
-      ? [ {{ label:'Irradiancia (W/m²)', stroke:C.solar, fill:'rgba(251,191,36,.13)', width:2 }} ]
-      : [
-          {{ label:'Rad. media (W/m²)', stroke:C.solar,   fill:'rgba(251,191,36,.08)', width:1.5 }},
-          {{ label:'Rad. máx.  (W/m²)', stroke:'#f59e0b', fill:'rgba(245,158,11,.12)', width:2.5 }},
-        ];
+      ? [ {{ label:'Irradiancia (W/m²)',  stroke:C.solar, fill:'rgba(251,191,36,.13)', width:2 }} ]
+      : [ {{ label:'Insolación (kWh/m²)', stroke:C.solar, fill:'rgba(251,191,36,.13)', width:2 }} ];
   }} else if(tabActiva==='presion'){{
     s1 = get('presion');
     tituloMain = 'Presión (mb) — '+pref;
@@ -4576,7 +4577,7 @@ function actualizarGrafico(datos){{
   document.getElementById('chart-title').textContent = tituloMain;
 
   if(s1.length && uSeriesMain.length){{
-    const hasDual = isGeneral || isViento || (isSolar && !esDia);
+    const hasDual = isGeneral || isViento;
     const dataArrays = hasDual ? [s1, s2] : [s1];
     const uData = buildUData(labels, dataArrays, esDia, fechaBase);
     _uMainData  = uData;
@@ -4936,7 +4937,7 @@ let chartSerie = null, chartHist = null, chartBox = null, chartDisp = null;
 const ACAD_META = {{
   temp:    {{ clave:'temp',       label:'Temperatura',       unit:'°C',   color:'#f87171' }},
   hum:     {{ clave:'hum',        label:'Humedad',            unit:'%',    color:'#38bdf8' }},
-  solar:   {{ clave:'solar',      label:'Radiación Solar',    unit:'W/m²', color:'#fbbf24' }},
+  solar:   {{ clave:'solar',      label:'Insolación Solar',   unit:'kWh/m²', color:'#fbbf24' }},
   lluvia:  {{ clave:'lluvia',     label:'Precipitación',      unit:'mm',   color:'#60a5fa' }},
   viento:  {{ clave:'viento_max', label:'Ráfaga máx. viento', unit:'km/h', color:'#a78bfa' }},
   presion: {{ clave:'presion',    label:'Presión',            unit:'mb',   color:'#6ee7b7' }},
@@ -5640,7 +5641,7 @@ function renderEventosExtremos(datos){{
     {{alias:'temp_min',  label:'Noche fresca',     cond:v=>v<=20,  desc:'T mín ≤ 20 °C',      icon:'❄️',   color:'#60a5fa'}},
     {{alias:'lluvia',    label:'Lluvia fuerte',    cond:v=>v>=20,  desc:'Precipitación ≥ 20 mm',icon:'🌧🔵',color:'#38bdf8'}},
     {{alias:'lluvia',    label:'Lluvia torrencial',cond:v=>v>=50,  desc:'Precipitación ≥ 50 mm',icon:'⛈🔵',color:'#818cf8'}},
-    {{alias:'solar',     label:'Radiación alta',   cond:v=>v>=750, desc:'Rad. media ≥ 750 W/m²',icon:'☀🟡',color:'#fbbf24'}},
+    {{alias:'solar',     label:'Radiación alta',   cond:v=>v>=6.5, desc:'Insolación ≥ 6.5 kWh/m²',icon:'☀🟡',color:'#fbbf24'}},
     {{alias:'viento_max',label:'Ráfaga fuerte',    cond:v=>v>=40,  desc:'Ráfaga ≥ 40 km/h',   icon:'💨🟣', color:'#a78bfa'}},
     {{alias:'viento_max',label:'Ráfaga extrema',   cond:v=>v>=55,  desc:'Ráfaga ≥ 55 km/h',   icon:'🌀⚡', color:'#e879f9'}},
     {{alias:'presion',   label:'Presión baja',     cond:v=>v<=1008,desc:'Presión ≤ 1008 mb',   icon:'🧭⬇', color:'#fbbf24'}},
@@ -6638,7 +6639,7 @@ function renderPrediccion(){{
         <td style="font-family:var(--mono)">${{p.fecha}}</td>
         <td style="color:var(--tx3)">${{p.doy}}</td>
         <td style="color:#f87171;font-family:var(--mono)">${{p.temp!=null?p.temp.toFixed(1)+'°C':'—'}}</td>
-        <td style="color:#fbbf24;font-family:var(--mono)">${{p.solar!=null?p.solar.toFixed(1)+' W/m²':'—'}}</td>
+        <td style="color:#fbbf24;font-family:var(--mono)">${{p.solar!=null?p.solar.toFixed(2)+' kWh/m²':'—'}}</td>
       </tr>`
     ).join('');
   }}
