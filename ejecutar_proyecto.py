@@ -22,11 +22,9 @@ El script hace TODO automáticamente:
   8. Genera dashboard_solar.html    (planta fotovoltaica)
   9. Genera dashboard_msn_interactivo.html (sensores climáticos)
  10. Abre todas las páginas en el navegador
- 11. Sincroniza docs/ para GitHub Pages
 
 Dónde quedan los datos:
   dashboard/  → archivos HTML listos para abrir en el navegador
-  docs/       → copia sincronizada para GitHub Pages (./publicar.sh)
   datos_crudos/weatherlink/ → CSVs WeatherLink ordenados
   datos_crudos/sma_solar/   → CSVs SMA ordenados y renombrados
 """
@@ -62,8 +60,6 @@ sys.path.insert(0, CORE)
 os.makedirs(EXPO, exist_ok=True)
 
 # ── Copiar assets JS/CSS de docs/ → dashboard/ si faltan ──────────────
-# Los archivos chart.umd.min.js, uPlot.iife.min.js y uPlot.min.css se
-# rastrean en docs/ (para GitHub Pages). dashboard/ los necesita localmente.
 _ASSETS = ["chart.umd.min.js", "uPlot.iife.min.js", "uPlot.min.css"]
 for _a in _ASSETS:
     _dst = os.path.join(DASH, _a)
@@ -966,7 +962,6 @@ def main():
     print("  ╠═══════════════════════════════════════════════════════╣")
     print("  ║  DÓNDE QUEDAN LOS RESULTADOS                         ║")
     print("  ║  dashboard/  → HTMLs listos para abrir               ║")
-    print("  ║  docs/       → copia para GitHub Pages               ║")
     print("  ║  datos_crudos/weatherlink/ → CSVs WeatherLink        ║")
     print("  ║  datos_crudos/sma_solar/   → CSVs SMA normalizados   ║")
     print("  ╚═══════════════════════════════════════════════════════╝")
@@ -1020,18 +1015,7 @@ def main():
         idx_path = os.path.join(carpeta, "index.html")
         with open(idx_path, "w", encoding="utf-8") as fh:
             fh.write(index_contenido)
-    ok("index.html generado en dashboard/ y docs/")
-
-    # Sincronizar docs/ con dashboard/ para GitHub Pages
-    paso("→", "Sincronizando docs/ para GitHub Pages")
-    os.makedirs(DOCS, exist_ok=True)
-    for fname in ["dashboard_fusion.html", "dashboard_solar.html",
-                  "dashboard_msn_interactivo.html"]:
-        src_path = os.path.join(DASH, fname)
-        dst_path = os.path.join(DOCS, fname)
-        if os.path.exists(src_path):
-            shutil.copy2(src_path, dst_path)
-            ok(f"{fname} → docs/")
+    ok("index.html generado en dashboard/")
 
     # Abrir navegador con la página de inicio
     abrir_dashboards(salida_fusion, salida_solar, salida_msn)

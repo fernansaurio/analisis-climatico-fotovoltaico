@@ -22,11 +22,12 @@ pip install pandas numpy
 
 ## Pasos de instalación
 
-### 1. Clonar el repositorio
+### 1. Descomprimir el archivo
+
+Extraer el ZIP en cualquier carpeta y entrar a ella:
 ```bash
-git clone https://github.com/TU_USUARIO/tarea-climatica.git
-cd tarea-climatica
-pip install pandas numpy
+unzip analisis-climatico-fotovoltaico.zip
+cd Tarea
 ```
 
 ### 2. Copiar los archivos de datos
@@ -35,7 +36,7 @@ Pega **todos** tus archivos CSV dentro de la carpeta `datos_crudos/`.
 No importa el orden ni si los mezclas — el script los detecta solos.
 
 ```
-tarea-climatica/
+Tarea/
 └── datos_crudos/          ← pon aquí todos los CSV (cualquier subestructura)
     ├── 7GT-EEP_1-1-25_....csv
     ├── 7GT-UES_1-1-25_....csv
@@ -56,7 +57,7 @@ python3 ordenar_datos.py
 El script analiza el contenido de cada CSV, lo identifica y lo mueve al lugar correcto:
 
 ```
-Escaneando: /home/.../tarea-climatica/datos_crudos/
+Escaneando: /home/.../Tarea/datos_crudos/
 ============================================================
   ✓  7GT-EEP_1-1-25_...csv   →  weatherlink/   [WeatherLink EEP]
   ✓  7GT-UES_1-1-25_...csv   →  weatherlink/   [WeatherLink UES]
@@ -85,7 +86,7 @@ No se necesita servidor web — funcionan con el protocolo `file://`.
 ## Estructura del proyecto (referencia)
 
 ```
-tarea-climatica/
+Tarea/
 ├── src/                        ← scripts Python de análisis
 │   ├── analisis_climatico.py   ← dashboard climático principal
 │   ├── analisis_sma.py         ← dashboard solar SMA
@@ -97,15 +98,13 @@ tarea-climatica/
 │   ├── ajuste_curvas.py        ← wrapper Python para AjusteCurvas
 │   ├── metodos_raices.py       ← wrapper Python para MetodosRaices
 │   └── algebra_lineal_lib.py   ← wrapper Python para AlgebraLineal
-├── datos_crudos/               ← datos CSV (NO incluidos en el repo)
+├── datos_crudos/               ← datos CSV
 │   ├── weatherlink/            ← generado por ordenar_datos.py
 │   └── sma_solar/              ← generado por ordenar_datos.py
 ├── dashboard/                  ← dashboards HTML generados
-├── docs/                       ← copia para GitHub Pages
 ├── reportes/                   ← bitácora, apuntes, PDF
 ├── ordenar_datos.py            ← auto-ordenador de datos CSV
-├── ejecutar_proyecto.py        ← punto de entrada principal
-└── publicar.sh                 ← sube dashboards a GitHub Pages
+└── ejecutar_proyecto.py        ← punto de entrada principal
 ```
 
 ---
