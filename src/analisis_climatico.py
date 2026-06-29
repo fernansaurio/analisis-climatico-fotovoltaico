@@ -3250,7 +3250,7 @@ def _construir_json_clima(df_eep, df_ues) -> dict:
     print("    Stats globales…")
     COLS_STATS = [
         "Temp - °C", "Hum - %", "Barometer - mb",
-        "Solar Rad - W/m^2", "Avg Wind Speed - km/h",
+        "Solar Rad - W/m^2", "Avg Wind Speed - km/h", "High Wind Speed - km/h",
         "Rain - mm", "Heat Index - °C", "Dew Point - °C",
         "UV Index", "ET - mm",
     ]
@@ -3268,7 +3268,7 @@ def _construir_json_clima(df_eep, df_ues) -> dict:
     # Stats mensuales por sensor
     stats_men_eep, stats_men_ues = {}, {}
     for col in ["Temp - °C", "Hum - %", "Solar Rad - W/m^2", "Rain - mm",
-                "Avg Wind Speed - km/h", "Barometer - mb"]:
+                "Avg Wind Speed - km/h", "High Wind Speed - km/h", "Barometer - mb"]:
         if col in df_eep.columns:
             stats_men_eep[col] = calcular_estadisticos_mensuales(df_eep, col)
         if col in df_ues.columns:
@@ -3276,12 +3276,12 @@ def _construir_json_clima(df_eep, df_ues) -> dict:
 
     # Stats por alias JS (clave → CSV col) para acceso directo desde el frontend
     _ALIAS_MAP = {
-        "temp":    "Temp - °C",
-        "hum":     "Hum - %",
-        "solar":   "Solar Rad - W/m^2",
-        "lluvia":  "Rain - mm",
-        "viento":  "Avg Wind Speed - km/h",
-        "presion": "Barometer - mb",
+        "temp":       "Temp - °C",
+        "hum":        "Hum - %",
+        "solar":      "Solar Rad - W/m^2",
+        "lluvia":     "Rain - mm",
+        "viento":     "High Wind Speed - km/h",   # ráfaga máx diaria
+        "presion":    "Barometer - mb",
     }
     def _rnd(v):
         return round(float(v), 4) if isinstance(v, (float, int)) else v
@@ -3927,7 +3927,7 @@ header{{display:flex;justify-content:space-between;align-items:flex-end;padding:
 </div>
 
 <!-- ══ TABLA RESUMEN MENSUAL COMPLETA ══ -->
-<div class="sec-head">Resumen Mensual Completo — C++ AjusteCurvas</div>
+<div class="sec-head" id="tabla-resumen-titulo">Resumen Mensual Completo — C++ AjusteCurvas</div>
 <div class="acad-card" style="margin-bottom:16px;overflow-x:auto">
   <div id="tabla-mensual-wrap" style="overflow-x:auto">
     <table class="ct" id="tabla-mensual">
@@ -4550,6 +4550,7 @@ function actualizarGrafico(datos){{
   // ──────────────────────────────────────────────────────────────────
   let s1=[], s2=[], tituloMain='', uSeriesMain=[];
   const isGeneral = tabActiva==='general' || tabActiva==='hum';
+  const isViento  = tabActiva==='viento';
 
   if(isGeneral){{
     s1 = get('temp'); s2 = get('hum');
@@ -4563,10 +4564,14 @@ function actualizarGrafico(datos){{
     s1 = get('lluvia');
     tituloMain = 'Precipitación (mm) — '+pref;
     uSeriesMain = [{{ label:'Lluvia (mm)', stroke:C.lluvia, fill:'rgba(96,165,250,.15)', width:2 }}];
-  }} else if(tabActiva==='viento'){{
+  }} else if(isViento){{
     s1 = get('viento');
-    tituloMain = 'Viento (km/h) — '+pref;
-    uSeriesMain = [{{ label:'Viento (km/h)', stroke:C.viento, fill:'rgba(167,139,250,.12)', width:2 }}];
+    s2 = get('viento_max');
+    tituloMain = 'Viento — '+pref;
+    uSeriesMain = [
+      {{ label:'Viento prom. (km/h)', stroke:C.viento,   fill:'rgba(167,139,250,.08)', width:1.5 }},
+      {{ label:'Ráfaga máx. (km/h)',  stroke:'#e879f9',  fill:'rgba(232,121,249,.10)', width:2.5 }},
+    ];
   }} else if(tabActiva==='presion'){{
     s1 = get('presion');
     tituloMain = 'Presión (mb) — '+pref;
@@ -4576,7 +4581,7 @@ function actualizarGrafico(datos){{
   document.getElementById('chart-title').textContent = tituloMain;
 
   if(s1.length && uSeriesMain.length){{
-    const dataArrays = isGeneral ? [s1, s2] : [s1];
+    const dataArrays = (isGeneral || isViento) ? [s1, s2] : [s1];
     const uData = buildUData(labels, dataArrays, esDia, fechaBase);
     _uMainData  = uData;
 
@@ -4933,12 +4938,12 @@ let acadVar = 'temp';
 let chartSerie = null, chartHist = null, chartBox = null, chartDisp = null;
 
 const ACAD_META = {{
-  temp:    {{ clave:'temp',    label:'Temperatura',      unit:'°C',    color:'#f87171' }},
-  hum:     {{ clave:'hum',     label:'Humedad',           unit:'%',     color:'#38bdf8' }},
-  solar:   {{ clave:'solar',   label:'Radiación Solar',   unit:'W/m²',  color:'#fbbf24' }},
-  lluvia:  {{ clave:'lluvia',  label:'Precipitación',     unit:'mm',    color:'#60a5fa' }},
-  viento:  {{ clave:'viento',  label:'Viento',            unit:'km/h',  color:'#a78bfa' }},
-  presion: {{ clave:'presion', label:'Presión',           unit:'mb',    color:'#6ee7b7' }},
+  temp:    {{ clave:'temp',       label:'Temperatura',       unit:'°C',   color:'#f87171' }},
+  hum:     {{ clave:'hum',        label:'Humedad',            unit:'%',    color:'#38bdf8' }},
+  solar:   {{ clave:'solar',      label:'Radiación Solar',    unit:'W/m²', color:'#fbbf24' }},
+  lluvia:  {{ clave:'lluvia',     label:'Precipitación',      unit:'mm',   color:'#60a5fa' }},
+  viento:  {{ clave:'viento_max', label:'Ráfaga máx. viento', unit:'km/h', color:'#a78bfa' }},
+  presion: {{ clave:'presion',    label:'Presión',            unit:'mb',   color:'#6ee7b7' }},
 }};
 
 function setAcadVar(v){{
@@ -5527,58 +5532,104 @@ function renderTendencia(datos, clave, color, unit){{
 // ══ TABLA RESUMEN MENSUAL COMPLETA ═══════════════════════════════════
 
 function renderTablaMensual(){{
-  const smAlias = CLIMA.stats_men_alias?.[sensor];
-  if(!smAlias) return;
-  const thead = document.getElementById('tabla-mensual-head');
-  const tbody = document.getElementById('tabla-mensual-body');
+  const thead  = document.getElementById('tabla-mensual-head');
+  const tbody  = document.getElementById('tabla-mensual-body');
+  const titulo = document.getElementById('tabla-resumen-titulo');
   if(!thead || !tbody) return;
 
-  const VARS_ORD = ['temp','hum','solar','lluvia','viento','presion'];
-  const LABS = {{temp:'Temp (°C)',hum:'Hum (%)',solar:'Solar (W/m²)',lluvia:'Lluvia (mm)',viento:'Viento (km/h)',presion:'Presión (mb)'}};
+  const f1 = v => (v!=null&&!isNaN(v)&&isFinite(v)) ? Number(v).toFixed(1) : '—';
 
-  // Encabezado: Mes | Temp_media Temp_max Temp_min | ...
+  // ── Vista por DÍA (cuando período = mes) ────────────────────────────
+  if(periodo === 'mes'){{
+    const mesActivo = (diaSelec||fechasConSensor(sensor).at(-1)||'').slice(0,7);
+    if(titulo) titulo.textContent = 'Resumen Diario — ' + mesActivo + ' · ' + sensor;
+
+    const diasMes = Object.keys(CLIMA.dias)
+      .filter(f=>f.startsWith(mesActivo) && CLIMA.dias[f]?.[sensor])
+      .sort();
+
+    thead.innerHTML = `<tr>
+      <th>Fecha</th>
+      <th colspan="3" style="text-align:center">Temp (°C)</th>
+      <th>Hum (%)</th>
+      <th>Lluvia (mm)</th>
+      <th>Ráfaga (km/h)</th>
+      <th>Presión (mb)</th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>Media</th><th style="color:#f87171">Máx</th><th style="color:#60a5fa">Mín</th>
+      <th>Media</th><th>Total</th><th>Máx</th><th>Media</th>
+    </tr>`;
+
+    tbody.innerHTML = diasMes.map(fecha=>{{
+      const d = CLIMA.dias[fecha][sensor];
+      return `<tr>
+        <td style="font-family:var(--mono);white-space:nowrap">${{fecha}}</td>
+        <td style="font-family:var(--mono)">${{f1(d.temp)}}</td>
+        <td style="font-family:var(--mono);color:#f87171">${{f1(d.temp_max)}}</td>
+        <td style="font-family:var(--mono);color:#60a5fa">${{f1(d.temp_min)}}</td>
+        <td style="font-family:var(--mono)">${{f1(d.hum)}}</td>
+        <td style="font-family:var(--mono);color:#38bdf8">${{f1(d.lluvia)}}</td>
+        <td style="font-family:var(--mono);color:#a78bfa">${{f1(d.viento_max)}}</td>
+        <td style="font-family:var(--mono);color:#6ee7b7">${{f1(d.presion)}}</td>
+      </tr>`;
+    }}).join('') || '<tr><td colspan="8" style="color:var(--tx3);text-align:center">Sin datos para este mes</td></tr>';
+    return;
+  }}
+
+  // ── Vista por MES (cuando período = anio o todo) ─────────────────────
+  const smAlias = CLIMA.stats_men_alias?.[sensor];
+  if(!smAlias) return;
+
+  const VARS_ORD = ['temp','hum','lluvia','viento','presion'];
+  const LABS = {{temp:'Temp (°C)',hum:'Hum (%)',lluvia:'Lluvia (mm)',viento:'Ráfaga (km/h)',presion:'Presión (mb)'}};
+
+  // Filtrar meses según período
+  let mesOrden;
+  if(periodo === 'anio'){{
+    const anioActivo = (diaSelec||fechasConSensor(sensor).at(-1)||'').slice(0,4);
+    if(titulo) titulo.textContent = 'Resumen Mensual — ' + anioActivo + ' · ' + sensor;
+    const meses = new Set();
+    Object.keys(CLIMA.dias).forEach(f=>{{ if(f.startsWith(anioActivo)&&CLIMA.dias[f]?.[sensor]) meses.add(f.slice(0,7)); }});
+    mesOrden = [...meses].sort();
+  }} else {{
+    if(titulo) titulo.textContent = 'Resumen Mensual Completo — C++ AjusteCurvas · ' + sensor;
+    const meses = new Set();
+    VARS_ORD.forEach(v=>{{ if(smAlias[v]) Object.keys(smAlias[v]).forEach(m=>meses.add(m)); }});
+    Object.keys(CLIMA.dias).forEach(f=>{{ if(CLIMA.dias[f]?.[sensor]) meses.add(f.slice(0,7)); }});
+    mesOrden = [...meses].sort();
+  }}
+
   thead.innerHTML = `<tr>
     <th>Mes</th>
     ${{VARS_ORD.map(v=>`<th colspan="3" style="text-align:center">${{LABS[v]||v}}</th>`).join('')}}
   </tr>
   <tr>
     <th></th>
-    ${{VARS_ORD.map(()=>'<th>Media</th><th>Máx</th><th>Mín</th>').join('')}}
+    ${{VARS_ORD.map(()=>'<th>Media</th><th style="color:#f87171">Máx</th><th style="color:#60a5fa">Mín</th>').join('')}}
   </tr>`;
 
-  // Ordenar meses disponibles (desde dias si faltan en smAlias)
-  const meses = new Set();
-  VARS_ORD.forEach(v=>{{ if(smAlias[v]) Object.keys(smAlias[v]).forEach(m=>meses.add(m)); }});
-  // Agregar meses de CLIMA.dias para cubrir viento/presion
-  Object.keys(CLIMA.dias).forEach(f=>{{ if(CLIMA.dias[f]?.[sensor]) meses.add(f.slice(0,7)); }});
-  const mesOrden = [...meses].sort();
-
-  const f1 = v => (v!=null&&!isNaN(v)) ? Number(v).toFixed(1) : '—';
-
-  // Fallback: calcular stats desde lecturas horarias del mes
-  function statsHorasMes(mes, clave){{
-    const diasMes = Object.keys(CLIMA.dias).filter(f=>f.startsWith(mes)&&CLIMA.dias[f]?.[sensor]);
-    let vals = [];
-    for(const f of diasMes){{
-      const hr = CLIMA.dias[f][sensor]?.horas;
-      if(hr && hr[clave]) vals = vals.concat(hr[clave].filter(v=>v!=null&&!isNaN(v)));
-    }}
+  // Obtener stats diarias del mes (desde CLIMA.dias) cuando faltan stats pre-computadas
+  function statsDiasMes(mes, clave){{
+    const dias = Object.keys(CLIMA.dias).filter(f=>f.startsWith(mes)&&CLIMA.dias[f]?.[sensor]);
+    const vals = dias.map(f=>CLIMA.dias[f][sensor]?.[clave]).filter(v=>v!=null&&!isNaN(v));
     if(!vals.length) return null;
     let s=0, mn=vals[0], mx=vals[0];
-    for(const v of vals){{ s+=v; if(v<mn) mn=v; if(v>mx) mx=v; }}
+    for(const v of vals){{ s+=v; if(v<mn)mn=v; if(v>mx)mx=v; }}
     return {{media:s/vals.length, minimo:mn, maximo:mx}};
   }}
 
   tbody.innerHTML = mesOrden.map(mes=>{{
     const cells = VARS_ORD.map(v=>{{
-      const sm = smAlias[v]?.[mes] || statsHorasMes(mes, v);
+      const sm = smAlias[v]?.[mes] || statsDiasMes(mes, v==='viento'?'viento_max':v);
       if(!sm) return '<td>—</td><td>—</td><td>—</td>';
       return `<td style="font-family:var(--mono)">${{f1(sm.media)}}</td>
               <td style="font-family:var(--mono);color:#f87171">${{f1(sm.maximo)}}</td>
               <td style="font-family:var(--mono);color:#60a5fa">${{f1(sm.minimo)}}</td>`;
     }}).join('');
     return `<tr><td style="font-family:var(--mono);white-space:nowrap">${{mes}}</td>${{cells}}</tr>`;
-  }}).join('');
+  }}).join('') || '<tr><td colspan="16" style="color:var(--tx3);text-align:center">Sin datos</td></tr>';
 }}
 
 // ══ EVENTOS EXTREMOS ═════════════════════════════════════════════════
